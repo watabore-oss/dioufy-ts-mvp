@@ -1,0 +1,15 @@
+<svg viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg">
+  <rect width="800" height="500" fill="#0F172A"/>
+
+  <path id="route-nord" d="M100,220 Q200,100 450,120" stroke="#334155" stroke-width="4" fill="none" stroke-dasharray="8"/>
+  <path id="route-est" d="M100,220 Q400,250 720,320" stroke="#334155" stroke-width="4" fill="none" stroke-dasharray="8"/>
+
+  <circle cx="100" cy="220" r="12" fill="#1E3A8A"/>
+  <text x="70" y="250" fill="white" font-size="24" font-weight="900">DAKAR</text>
+
+  <circle cx="450" cy="120" r="10" fill="#FBBF24"/>
+  <text x="430" y="95" fill="white" font-size="18" font-weight="700">SAINT-LOUIS</text>
+
+  <circle cx="720" cy="320" r="10" fill="#059669"/>
+  <text x="690" y="350" fill="white" font-size="18" font-weight="700">TAMBACOUNDA</text>
+</svg>
