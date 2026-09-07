@@ -27,3 +27,4 @@ doc project/
 *.iml
 .metadata_backup
 *_backup*
+*.zip
