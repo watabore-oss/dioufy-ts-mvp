@@ -10,5 +10,19 @@ android/app/debug
 android/app/profile
 android/app/release
 
-# Supabase
+# Supabase & Secrets
 .env
+.env*
+API key token docs/
+doc project/
+*.docx
+
+# Logs
+*.log
+
+# IDE & Editor
+.idea/
+.vscode/
+*.iml
+.metadata_backup
+*_backup*

@@ -1,12 +1,10 @@
--- Supabase / Postgres schema for Dioufy-TS MVP
--- IDEMPOTENCE STRATEGY:
---   1. All mutations use either idempotency_key (payments) or request_id (lock_seat, release_seat)
---   2. idempotent_requests table stores request_id + operation -> cached result
---   3. Functions check cache first BEFORE modifying state
---   4. On retry, the same booking/payment result is returned
---   5. Old requests (>24h) are purged by expire_locks() cron job
---
--- This ensures exactly-once semantics even with network retries, webhook duplicates, or client errors.
+-- ===================================================================
+-- SUPABASE SCHEMA INITIALIZATION SCRIPT FOR DIOUFY-TS MVP
+-- ===================================================================
+-- Copy & paste this entire script into Supabase SQL Editor at:
+-- https://supabase.com/dashboard/project/yrarlatdoulyfyjpqzlp/sql/new
+-- Then click "Run"
+-- ===================================================================
 
 -- Enable useful extensions
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
@@ -25,7 +23,7 @@ CREATE TABLE IF NOT EXISTS app_users (
   phone text,
   email text,
   full_name text,
-  role text DEFAULT 'traveller', -- traveller | driver | agency_staff | admin
+  role text DEFAULT 'traveller',
   agency_id uuid REFERENCES agencies(id) ON DELETE SET NULL,
   fcm_token text,
   created_at timestamptz DEFAULT now()
@@ -50,7 +48,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   user_id uuid REFERENCES app_users(id) ON DELETE SET NULL,
   trip_id uuid REFERENCES trips(id) ON DELETE CASCADE,
   seats jsonb NOT NULL DEFAULT '[]'::jsonb,
-  status text NOT NULL DEFAULT 'pending', -- pending | paid | cancelled
+  status text NOT NULL DEFAULT 'pending',
   lock_expires_at timestamptz,
   agency_id uuid REFERENCES agencies(id) ON DELETE SET NULL,
   created_at timestamptz DEFAULT now()
@@ -61,7 +59,7 @@ CREATE TABLE IF NOT EXISTS seats (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   trip_id uuid REFERENCES trips(id) ON DELETE CASCADE,
   seat_number text NOT NULL,
-  status text NOT NULL DEFAULT 'available', -- available | locked | sold
+  status text NOT NULL DEFAULT 'available',
   lock_until timestamptz,
   locked_by uuid REFERENCES bookings(id) ON DELETE SET NULL,
   created_at timestamptz DEFAULT now(),
@@ -72,8 +70,8 @@ CREATE TABLE IF NOT EXISTS seats (
 CREATE TABLE IF NOT EXISTS idempotent_requests (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   request_id text NOT NULL,
-  operation text NOT NULL, -- 'lock_seat', 'payment', 'release_seat', etc.
-  result jsonb NOT NULL, -- the response to return on retry
+  operation text NOT NULL,
+  result jsonb NOT NULL,
   created_at timestamptz DEFAULT now(),
   UNIQUE (request_id, operation)
 );
@@ -85,7 +83,7 @@ CREATE TABLE IF NOT EXISTS payments (
   amount integer NOT NULL,
   provider text,
   provider_ref text,
-  status text NOT NULL DEFAULT 'pending', -- pending | successful | failed
+  status text NOT NULL DEFAULT 'pending',
   idempotency_key text NOT NULL,
   created_at timestamptz DEFAULT now(),
   UNIQUE (idempotency_key),
@@ -127,11 +125,6 @@ CREATE INDEX IF NOT EXISTS idx_bookings_trip ON bookings(trip_id);
 CREATE INDEX IF NOT EXISTS idx_idempotent_requests_lookup ON idempotent_requests(request_id, operation);
 CREATE INDEX IF NOT EXISTS idx_idempotent_requests_cleanup ON idempotent_requests(created_at);
 
--- Row Level Security: enable per-table and provide sample policies
-
--- Helper note: adjust the claim name used below to match your JWT claims.
--- Supabase exposes JWT claims via current_setting('jwt.claims.<claim_name>', true)
-
 -- Enable RLS on tables that must be isolated per agency
 ALTER TABLE trips ENABLE ROW LEVEL SECURITY;
 ALTER TABLE seats ENABLE ROW LEVEL SECURITY;
@@ -139,30 +132,12 @@ ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tickets ENABLE ROW LEVEL SECURITY;
 
 -- Policy: allow service role (server-side) full read/write access
-CREATE POLICY service_role_full_access ON trips
-  FOR ALL
-  USING ( current_setting('request.jwt.claims.role', true) = 'service_role' );
+CREATE POLICY service_role_full_access ON trips FOR ALL USING ( current_setting('request.jwt.claims.role', true) = 'service_role' );
+CREATE POLICY service_role_full_access_bookings ON bookings FOR ALL USING ( current_setting('request.jwt.claims.role', true) = 'service_role' );
+CREATE POLICY service_role_full_access_seats ON seats FOR ALL USING ( current_setting('request.jwt.claims.role', true) = 'service_role' );
+CREATE POLICY service_role_full_access_tickets ON tickets FOR ALL USING ( current_setting('request.jwt.claims.role', true) = 'service_role' );
 
--- Policy: allow service role (server-side) full read/write access for bookings
-CREATE POLICY service_role_full_access_bookings ON bookings
-  FOR ALL
-  USING ( current_setting('request.jwt.claims.role', true) = 'service_role' );
-
--- Policy: allow service role (server-side) full read/write access for seats
-CREATE POLICY service_role_full_access_seats ON seats
-  FOR ALL
-  USING ( current_setting('request.jwt.claims.role', true) = 'service_role' );
-
--- Policy: allow service role (server-side) full read/write access for tickets
-CREATE POLICY service_role_full_access_tickets ON tickets
-  FOR ALL
-  USING ( current_setting('request.jwt.claims.role', true) = 'service_role' );
-
--- Note: These policies are starter samples for MVP. Expand with user/driver/agency isolation as needed.
-
-
-
--- Atomic seat lock function with idempotence: uses request_id to guarantee exactly-once
+-- Atomic seat lock function with idempotence
 CREATE OR REPLACE FUNCTION lock_seat(
   p_trip_id uuid,
   p_seat_number text,
@@ -198,7 +173,7 @@ BEGIN
     RAISE EXCEPTION 'Seat not found';
   END IF;
 
-  -- check availability (allow if available or locked but expired)
+  -- check availability
   PERFORM 1 FROM seats WHERE id = v_seat_id AND (
     status = 'available' OR (status = 'locked' AND (lock_until IS NULL OR lock_until < v_now))
   );
@@ -228,7 +203,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Release seat with idempotence: safe to call multiple times
+-- Release seat with idempotence
 CREATE OR REPLACE FUNCTION release_seat(
   p_booking_id uuid,
   p_request_id text DEFAULT NULL
