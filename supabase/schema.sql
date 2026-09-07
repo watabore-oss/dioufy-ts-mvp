@@ -273,6 +273,40 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Confirmation atomique et idempotente du paiement et libération/validation des billets
+CREATE OR REPLACE FUNCTION confirm_payment(
+  p_booking_id uuid,
+  p_provider text DEFAULT 'Wave',
+  p_provider_ref text DEFAULT NULL,
+  p_amount integer DEFAULT 0,
+  p_ticket_signature text DEFAULT ''
+) RETURNS jsonb AS $$
+DECLARE
+  v_payment_id uuid;
+  v_idempotency_key text;
+BEGIN
+  v_idempotency_key := COALESCE(p_provider_ref, 'pay_' || p_booking_id::text);
+
+  -- 1. Inserer le paiement s'il n'existe pas deja (idempotent)
+  INSERT INTO payments (booking_id, amount, provider, provider_ref, status, idempotency_key)
+  VALUES (p_booking_id, p_amount, p_provider, p_provider_ref, 'successful', v_idempotency_key)
+  ON CONFLICT (idempotency_key) DO UPDATE SET status = 'successful'
+  RETURNING id INTO v_payment_id;
+
+  -- 2. Passer la reservation a 'paid'
+  UPDATE bookings SET status = 'paid' WHERE id = p_booking_id;
+
+  -- 3. Passer les sieges a 'sold'
+  UPDATE seats SET status = 'sold', lock_until = NULL WHERE locked_by = p_booking_id;
+
+  RETURN jsonb_build_object('success', true, 'payment_id', v_payment_id);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION confirm_payment(uuid, text, text, integer, text) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION lock_seat(uuid, text, uuid, integer, text) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION release_seat(uuid, text) TO anon, authenticated, service_role;
+
 -- ===================================================================
 -- SEED INITIAL (Données de démonstration pour MVP Dioufy-TS)
 -- ===================================================================
@@ -312,5 +346,14 @@ BEGIN
   INSERT INTO trips (id, agency_id, from_loc, to_loc, depart_at, price, seats_count, metadata)
     VALUES ('t0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000003', 'Dakar', 'Touba', now() + interval '5 hours', 9500, 36, '{"type": "STANDARD"}'::jsonb)
     ON CONFLICT (id) DO NOTHING;
+
+  -- Sièges déjà vendus de démonstration
+  INSERT INTO seats (trip_id, seat_number, status)
+    VALUES 
+      ('t0000000-0000-0000-0000-000000000001', 'A3', 'sold'),
+      ('t0000000-0000-0000-0000-000000000001', 'B2', 'sold'),
+      ('t0000000-0000-0000-0000-000000000001', 'C5', 'sold'),
+      ('t0000000-0000-0000-0000-000000000001', 'D1', 'sold')
+    ON CONFLICT (trip_id, seat_number) DO NOTHING;
 END;
 $$;

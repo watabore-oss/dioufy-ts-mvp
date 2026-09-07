@@ -46,7 +46,7 @@ class BookingService {
             final status = item['status']?.toString();
             if (seatNumber == null) continue;
 
-            if (status == 'occupied' || status == 'booked') {
+            if (status == 'occupied' || status == 'booked' || status == 'sold') {
               occupied.add(seatNumber);
             } else if (status == 'locked') {
               final lockUntilStr = item['lock_until']?.toString();
@@ -164,6 +164,33 @@ class BookingService {
         });
       } catch (e) {
         debugPrint('Erreur release_seat: $e');
+      }
+    }
+  }
+
+  /// Confirme le paiement et bascule les sieges en vendus via RPC securise.
+  Future<void> confirmPayment({
+    required List<String> bookingIds,
+    required String provider,
+    required String providerRef,
+    required int amount,
+  }) async {
+    for (var bookingId in bookingIds) {
+      if (bookingId.startsWith('local_') || bookingId.startsWith('demo-')) {
+        continue;
+      }
+
+      if (_client != null) {
+        try {
+          await _client!.rpc('confirm_payment', params: {
+            'p_booking_id': bookingId,
+            'p_provider': provider,
+            'p_provider_ref': providerRef,
+            'p_amount': amount ~/ (bookingIds.isEmpty ? 1 : bookingIds.length),
+          });
+        } catch (e) {
+          debugPrint('Avertissement confirm_payment: $e');
+        }
       }
     }
   }

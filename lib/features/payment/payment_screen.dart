@@ -1,4 +1,4 @@
-﻿import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutterwave_standard/flutterwave.dart';
 
@@ -31,6 +31,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   /// Valide un paiement de test/simulation et genere le ticket
   void _completePaymentWithSuccess(String transactionRef) {
+    _bookingService.confirmPayment(
+      bookingIds: widget.bookingIds,
+      provider: _selectedProvider,
+      providerRef: transactionRef,
+      amount: _totalAmount,
+    );
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(

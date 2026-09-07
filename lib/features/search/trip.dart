@@ -56,7 +56,7 @@ class Trip {
       for (var s in seatsList) {
         if (s is Map) {
           final status = s['status']?.toString();
-          if (status == 'occupied' || status == 'booked') {
+          if (status == 'occupied' || status == 'booked' || status == 'sold') {
             occupiedCount++;
           } else if (status == 'locked') {
             final lockUntilStr = s['lock_until']?.toString();
