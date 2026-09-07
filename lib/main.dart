@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'core/config.dart';
 import 'core/theme.dart';
 import 'features/home/home_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Supabase.initialize(
-    url: 'https://TON-PROJET.supabase.co',
-    anonKey: 'TON_ANON_KEY',
-  );
+  if (AppConfig.hasSupabaseCredentials) {
+    await Supabase.initialize(
+      url: AppConfig.supabaseUrl,
+      anonKey: AppConfig.supabaseAnonKey,
+    );
+  }
 
   runApp(const DioufyApp());
 }

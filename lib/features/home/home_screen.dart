@@ -68,7 +68,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               TextField(
                                 controller: depController,
                                 decoration: const InputDecoration(
-                                  labelText: 'Depart',
+                                  labelText: 'Départ',
+                                  prefixIcon: Icon(Icons.trip_origin),
                                 ),
                               ),
                               const SizedBox(height: 12),
@@ -76,6 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 controller: arrController,
                                 decoration: const InputDecoration(
                                   labelText: 'Destination',
+                                  prefixIcon: Icon(Icons.flag_outlined),
                                 ),
                               ),
                               const SizedBox(height: 12),
@@ -83,7 +85,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                 onPressed: () => Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => const SearchResultsScreen(),
+                                    builder: (_) => SearchResultsScreen(
+                                      departure: depController.text,
+                                      arrival: arrController.text,
+                                    ),
                                   ),
                                 ),
                                 style: ElevatedButton.styleFrom(
