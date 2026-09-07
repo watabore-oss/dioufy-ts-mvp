@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../chauffeur/chauffeur_screen.dart';
 import '../search/search_results_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -19,9 +20,8 @@ class _HomeScreenState extends State<HomeScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // Hero identique à ton prototype
+            // En-tête adaptatif Hero
             Container(
-              height: 420,
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   colors: [Color(0xFF0F172A), Color(0xFF1E3A8A)],
@@ -34,11 +34,38 @@ class _HomeScreenState extends State<HomeScreen> {
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
-                      // logo en haut
-                      Image.asset(
-                        'assets/logo.jpeg',
-                        height: 80,
-                        fit: BoxFit.contain,
+                      // Logo et bouton accès Chef de bord
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Image.asset(
+                            'assets/logo.jpeg',
+                            height: 60,
+                            fit: BoxFit.contain,
+                          ),
+                          TextButton.icon(
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const ChauffeurScreen(),
+                              ),
+                            ),
+                            icon: const Icon(Icons.qr_code_scanner,
+                                color: Color(0xFFFBBF24)),
+                            label: const Text(
+                              "Chef de bord",
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                            style: TextButton.styleFrom(
+                              backgroundColor:
+                                  Colors.white.withValues(alpha: 0.1),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20)),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
                       const Text("Dioufy-TS",
@@ -49,7 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const Text("Fo nek sa gare fek lafa",
                           style: TextStyle(
                               fontSize: 18, color: Color(0xFFFBBF24))),
-                      const SizedBox(height: 30),
+                      const SizedBox(height: 20),
 
                       // Formulaire amélioré
                       Card(

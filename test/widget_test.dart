@@ -11,21 +11,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dioufy_ts_mvp/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
+  testWidgets('DioufyApp smoke test - HomeScreen affiche Dioufy-TS et le formulaire',
+      (WidgetTester tester) async {
     await tester.pumpWidget(const DioufyApp());
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    // Verifie la presence du titre Dioufy-TS et du slogan
+    expect(find.text('Dioufy-TS'), findsOneWidget);
+    expect(find.text('Fo nek sa gare fek lafa'), findsOneWidget);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    // Verifie la presence du bouton de recherche
+    expect(find.text('RECHERCHER'), findsOneWidget);
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Verifie le bouton Chef de bord
+    expect(find.text('Chef de bord'), findsOneWidget);
   });
 }
 
