@@ -54,7 +54,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   /// Simulation d'un paiement reussi pour le mode test web et offline
   void _simulateSuccessPayment() {
     setState(() => _processing = true);
-    Future.delayed(const Duration(milliseconds: 600), () {
+    Future.delayed(const Duration(milliseconds: 150), () {
       if (!mounted) return;
       setState(() => _processing = false);
       final testRef = 'FLW-TEST-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';

@@ -22,6 +22,12 @@ class BookingService {
     }
   }
 
+  static final _uuidRegex = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+
+  static bool _isValidUuid(String str) => _uuidRegex.hasMatch(str);
+
   /// Genere un UUID unique pour l''idempotence
   String _generateRequestId(String operation) {
     return '$operation-${const Uuid().v4()}';
@@ -29,12 +35,18 @@ class BookingService {
 
   /// Recupere la liste des numeros de sieges occupes ou verrouilles pour un trajet
   Future<List<String>> getOccupiedSeats(String tripId) async {
+    // Si l'identifiant n'est pas un UUID valide, repli local instantané (0ms)
+    if (!_isValidUuid(tripId)) {
+      return const ['A3', 'B2', 'C5', 'D1'];
+    }
+
     if (_client != null) {
       try {
         final response = await _client!
             .from('seats')
             .select('seat_number, status, lock_until')
-            .eq('trip_id', tripId);
+            .eq('trip_id', tripId)
+            .timeout(const Duration(milliseconds: 1500));
 
         final List list = response as List;
         final now = DateTime.now();
@@ -63,12 +75,12 @@ class BookingService {
         }
         return occupied;
       } catch (e) {
-        debugPrint('Erreur recuperation sieges Supabase: $e');
+        debugPrint('Recuperation sieges Supabase rapide: $e');
       }
     }
 
     // Repli local par defaut pour tests hors ligne
-    return ['A3', 'B2', 'C5', 'D1'];
+    return const ['A3', 'B2', 'C5', 'D1'];
   }
 
   /// Verrouille un siege de facon transactionnelle via la fonction RPC `lock_seat`.
@@ -84,6 +96,12 @@ class BookingService {
   }) async {
     final reqId = requestId ?? _generateRequestId('lock-seat');
 
+    // Trajets locaux / démo : réponse instantanée (0ms)
+    if (!_isValidUuid(tripId)) {
+      final prefix = tripId.length >= 4 ? tripId.substring(0, 4) : tripId;
+      return 'local_b_$prefix-$seatNumber';
+    }
+
     if (_client != null) {
       try {
         final res = await _client!.rpc('lock_seat', params: {
@@ -92,7 +110,7 @@ class BookingService {
           'p_user_id': userId,
           'p_lock_minutes': lockMinutes,
           'p_request_id': reqId,
-        });
+        }).timeout(const Duration(milliseconds: 2000));
 
         if (res != null) {
           return res.toString();
@@ -102,8 +120,7 @@ class BookingService {
         if (errorMsg.contains('not available') || errorMsg.contains('already')) {
           throw Exception('Le siege $seatNumber est deja reserve ou en cours de reservation.');
         }
-        debugPrint('Avertissement lock_seat RPC: $e');
-        // Si la fonction n''est pas encore chargee dans l''instance Supabase, simule localement
+        debugPrint('Avertissement lock_seat RPC rapide: $e');
         final prefix = tripId.length >= 4 ? tripId.substring(0, 4) : tripId;
         return 'local_b_$prefix-$seatNumber';
       }

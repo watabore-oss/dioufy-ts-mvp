@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../payment/payment_screen.dart';
 import '../search/trip.dart';
@@ -14,8 +14,8 @@ class SeatSelectionScreen extends StatefulWidget {
 
 class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
   final List<String> selectedSeats = [];
-  List<String> occupiedSeats = [];
-  bool _isLoadingSeats = true;
+  List<String> occupiedSeats = const ['A3', 'B2', 'C5', 'D1'];
+  bool _isLoadingSeats = false;
   bool _isLocking = false;
   String? _lockError;
 
@@ -43,7 +43,7 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
           _isLoadingSeats = false;
         });
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         setState(() {
           _isLoadingSeats = false;
@@ -119,22 +119,18 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
             ),
           ),
 
+          if (_isLoadingSeats)
+            const LinearProgressIndicator(
+              color: Color(0xFF1E3A8A),
+              backgroundColor: Color(0xFFE2E8F0),
+              minHeight: 3,
+            ),
+
           // Grille des sieges
           Expanded(
-            child: _isLoadingSeats
-                ? const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(color: Color(0xFF1E3A8A)),
-                        SizedBox(height: 16),
-                        Text("Vérification des disponibilités en temps réel..."),
-                      ],
-                    ),
-                  )
-                : Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: GridView.builder(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: GridView.builder(
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 6,
                         crossAxisSpacing: 10,

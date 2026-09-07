@@ -1,4 +1,4 @@
-﻿import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../features/search/trip.dart';
 
@@ -20,11 +20,14 @@ class TripService {
     }
   }
 
+  /// Cache en memoire pour eviter toute requete reseau repetee inutile
+  static final Map<String, List<Trip>> _memoryCache = {};
+
   /// Trajets par defaut utilises en mode hors-ligne ou si la base distante est vide.
   static final List<Trip> _fallbackTrips = [
     // Dakar -> Thies
     const Trip(
-      id: 't1',
+      id: 't0000000-0000-0000-0000-000000000001',
       time: "08:30",
       type: "CONFORT",
       company: "Dioufy Trans",
@@ -35,7 +38,7 @@ class TripService {
       seatsCount: 36,
     ),
     const Trip(
-      id: 't2',
+      id: 't0000000-0000-0000-0000-000000000002',
       time: "10:15",
       type: "STANDARD",
       company: "Galsen Tour",
@@ -46,7 +49,7 @@ class TripService {
       seatsCount: 36,
     ),
     const Trip(
-      id: 't3',
+      id: 't0000000-0000-0000-0000-000000000005',
       time: "14:00",
       type: "CONFORT",
       company: "Dioufy Trans",
@@ -58,7 +61,7 @@ class TripService {
     ),
     // Dakar -> Touba
     const Trip(
-      id: 't4',
+      id: 't0000000-0000-0000-0000-000000000003',
       time: "07:00",
       type: "CONFORT",
       company: "Dioufy Trans",
@@ -69,7 +72,7 @@ class TripService {
       seatsCount: 36,
     ),
     const Trip(
-      id: 't5',
+      id: 't0000000-0000-0000-0000-000000000004',
       time: "09:45",
       type: "STANDARD",
       company: "Touba Express",
@@ -80,7 +83,7 @@ class TripService {
       seatsCount: 36,
     ),
     const Trip(
-      id: 't6',
+      id: 't0000000-0000-0000-0000-000000000006',
       time: "13:30",
       type: "CONFORT",
       company: "Dioufy Trans",
@@ -92,13 +95,35 @@ class TripService {
     ),
   ];
 
-  /// Recherche les trajets correspondants au depart et a la destination
+  /// Recupere instantanement (0ms) les trajets disponibles sans attendre le reseau.
+  List<Trip> getInstantTrips({
+    required String departure,
+    required String destination,
+  }) {
+    final cleanDep = _cleanCityName(departure);
+    final cleanDest = _cleanCityName(destination);
+    final cacheKey = '$cleanDep->$cleanDest';
+
+    if (_memoryCache.containsKey(cacheKey) && _memoryCache[cacheKey]!.isNotEmpty) {
+      return _memoryCache[cacheKey]!;
+    }
+
+    return _fallbackTrips.where((t) {
+      final tDep = _cleanCityName(t.departure);
+      final tDest = _cleanCityName(t.arrival);
+      return (tDep.contains(cleanDep) || cleanDep.contains(tDep)) &&
+          (tDest.contains(cleanDest) || cleanDest.contains(tDest));
+    }).toList();
+  }
+
+  /// Recherche les trajets avec revalidation Supabase rapide et timeout de 1500ms
   Future<List<Trip>> searchTrips({
     required String departure,
     required String destination,
   }) async {
     final cleanDep = _cleanCityName(departure);
     final cleanDest = _cleanCityName(destination);
+    final cacheKey = '$cleanDep->$cleanDest';
 
     if (_client != null) {
       try {
@@ -107,24 +132,24 @@ class TripService {
             .select('*, agencies(name), seats(id, status, lock_until)')
             .ilike('from_loc', '%$cleanDep%')
             .ilike('to_loc', '%$cleanDest%')
-            .order('depart_at', ascending: true);
+            .order('depart_at', ascending: true)
+            .timeout(const Duration(milliseconds: 1500));
 
         final List list = response as List;
         if (list.isNotEmpty) {
-          return list.map((item) => Trip.fromMap(item as Map<String, dynamic>)).toList();
+          final remoteTrips =
+              list.map((item) => Trip.fromMap(item as Map<String, dynamic>)).toList();
+          _memoryCache[cacheKey] = remoteTrips;
+          return remoteTrips;
         }
       } catch (e) {
-        debugPrint('Avertissement Supabase searchTrips: $e');
+        debugPrint('Recherche Supabase repli rapide: $e');
       }
     }
 
-    // Repli local en cas d'echec reseau ou si la table n'a pas encore de donnees
-    return _fallbackTrips.where((t) {
-      final tDep = _cleanCityName(t.departure);
-      final tDest = _cleanCityName(t.arrival);
-      return (tDep.contains(cleanDep) || cleanDep.contains(tDep)) &&
-          (tDest.contains(cleanDest) || cleanDest.contains(tDest));
-    }).toList();
+    final localTrips = getInstantTrips(departure: departure, destination: destination);
+    _memoryCache[cacheKey] = localTrips;
+    return localTrips;
   }
 
   static String _cleanCityName(String city) {
