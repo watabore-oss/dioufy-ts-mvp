@@ -1,4 +1,4 @@
-﻿import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
@@ -150,6 +150,11 @@ class BookingService {
     required String bookingId,
     String? requestId,
   }) async {
+    // Si c'est un identifiant local ou démo, aucun appel réseau nécessaire
+    if (bookingId.startsWith('local_') || bookingId.startsWith('demo-')) {
+      return;
+    }
+
     if (_client != null) {
       try {
         final reqId = requestId ?? _generateRequestId('release-seat');
