@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../payment/payment_screen.dart';
 import '../search/trip.dart';
@@ -14,22 +14,55 @@ class SeatSelectionScreen extends StatefulWidget {
 
 class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
   final List<String> selectedSeats = [];
-  final List<String> occupiedSeats = ["A3", "B2", "C5", "D1"];
-
-  void toggleSeat(String seat) {
-    setState(() {
-      if (selectedSeats.contains(seat)) {
-        selectedSeats.remove(seat);
-      } else if (!occupiedSeats.contains(seat)) {
-        selectedSeats.add(seat);
-      }
-    });
-  }
-
+  List<String> occupiedSeats = [];
+  bool _isLoadingSeats = true;
   bool _isLocking = false;
   String? _lockError;
 
   final BookingService _bookingService = BookingService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOccupiedSeats();
+  }
+
+  Future<void> _loadOccupiedSeats() async {
+    setState(() {
+      _isLoadingSeats = true;
+      _lockError = null;
+    });
+
+    try {
+      final seats = await _bookingService.getOccupiedSeats(widget.trip.id);
+      if (mounted) {
+        setState(() {
+          occupiedSeats = seats;
+          // Retirer de la selection si un siege devenu occupe y etait
+          selectedSeats.removeWhere((s) => occupiedSeats.contains(s));
+          _isLoadingSeats = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingSeats = false;
+        });
+      }
+    }
+  }
+
+  void toggleSeat(String seat) {
+    if (occupiedSeats.contains(seat)) return;
+
+    setState(() {
+      if (selectedSeats.contains(seat)) {
+        selectedSeats.remove(seat);
+      } else {
+        selectedSeats.add(seat);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,105 +76,177 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
             : null,
         title: Text("Quai Virtuel • ${widget.trip.time}"),
         backgroundColor: const Color(0xFF0F172A),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: "Actualiser les places",
+            onPressed: _loadOccupiedSeats,
+          ),
+        ],
       ),
       body: Column(
         children: [
-          // En-tête comme prototype
+          // En-tete récapitulatif
           Container(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(20),
             color: const Color(0xFF0F172A),
             child: Column(
               children: [
-                Text(widget.trip.company,
-                    style: const TextStyle(
-                        fontSize: 28,
-                        color: Color(0xFFFBBF24),
-                        fontWeight: FontWeight.w900)),
-                Text("${widget.trip.departure} → ${widget.trip.arrival}",
-                    style: const TextStyle(fontSize: 18, color: Colors.white)),
+                Text(
+                  widget.trip.company,
+                  style: const TextStyle(
+                    fontSize: 26,
+                    color: Color(0xFFFBBF24),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  "${widget.trip.departure} → ${widget.trip.arrival}",
+                  style: const TextStyle(fontSize: 16, color: Colors.white),
+                ),
+                const SizedBox(height: 16),
+                // Legende visuelle
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _legendItem(const Color(0xFF059669), "Libre"),
+                    _legendItem(const Color(0xFF1E3A8A), "Sélectionné"),
+                    _legendItem(Colors.grey[400]!, "Occupé"),
+                  ],
+                ),
               ],
             ),
           ),
-          // Grille sièges
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: GridView.builder(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 6,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12),
-                itemCount: 36, // exemple 6 rangées x 6
-                itemBuilder: (context, index) {
-                  String seatNumber =
-                      "${String.fromCharCode(65 + (index ~/ 6))}${index % 6 + 1}";
-                  bool isOccupied = occupiedSeats.contains(seatNumber);
-                  bool isSelected = selectedSeats.contains(seatNumber);
 
-                  return GestureDetector(
-                    onTap: () => toggleSeat(seatNumber),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: isOccupied
-                            ? Colors.grey[300]
-                            : (isSelected
-                                ? const Color(0xFF1E3A8A)
-                                : const Color(0xFF059669)),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                            color: isSelected
-                                ? const Color(0xFFFBBF24)
-                                : Colors.transparent,
-                            width: 3),
-                      ),
-                      child: Center(
-                        child: Text(seatNumber,
-                            style: TextStyle(
-                                color: isSelected || isOccupied
-                                    ? Colors.white
-                                    : Colors.black,
-                                fontWeight: FontWeight.bold)),
-                      ),
+          // Grille des sieges
+          Expanded(
+            child: _isLoadingSeats
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(color: Color(0xFF1E3A8A)),
+                        SizedBox(height: 16),
+                        Text("Vérification des disponibilités en temps réel..."),
+                      ],
                     ),
-                  );
-                },
-              ),
-            ),
+                  )
+                : Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: GridView.builder(
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 6,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                      ),
+                      itemCount: widget.trip.seatsCount,
+                      itemBuilder: (context, index) {
+                        final seatNumber =
+                            "${String.fromCharCode(65 + (index ~/ 6))}${index % 6 + 1}";
+                        final isOccupied = occupiedSeats.contains(seatNumber);
+                        final isSelected = selectedSeats.contains(seatNumber);
+
+                        return GestureDetector(
+                          onTap: () => toggleSeat(seatNumber),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: isOccupied
+                                  ? Colors.grey[300]
+                                  : (isSelected
+                                      ? const Color(0xFF1E3A8A)
+                                      : const Color(0xFF059669)),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected
+                                    ? const Color(0xFFFBBF24)
+                                    : Colors.transparent,
+                                width: 3,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                seatNumber,
+                                style: TextStyle(
+                                  color: isOccupied
+                                      ? Colors.grey[600]
+                                      : Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
           ),
-          // Récap + bouton comme prototype
+
+          // Récapitulatif et bouton de validation
           Container(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(20),
             decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: Colors.grey))),
+              color: Colors.white,
+              border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+            ),
             child: Column(
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text("Sièges choisis",
-                        style: TextStyle(fontSize: 18)),
-                    Text(selectedSeats.join(", "),
-                        style: const TextStyle(
-                            fontSize: 22, fontWeight: FontWeight.w900)),
+                    const Text("Sièges choisis", style: TextStyle(fontSize: 16)),
+                    Text(
+                      selectedSeats.isEmpty ? "Aucun" : selectedSeats.join(", "),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text("Total", style: TextStyle(fontSize: 18)),
-                    Text("${widget.trip.price * selectedSeats.length} XOF",
-                        style: const TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF059669))),
+                    const Text("Total à payer", style: TextStyle(fontSize: 16)),
+                    Text(
+                      "${widget.trip.price * selectedSeats.length} XOF",
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF059669),
+                      ),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 20),
+                if (_lockError != null) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.red[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red[200]!),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_outline, color: Colors.red, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _lockError!,
+                            style: const TextStyle(color: Colors.red, fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
-                  height: 60,
+                  height: 56,
                   child: ElevatedButton(
                     onPressed: selectedSeats.isEmpty || _isLocking
                         ? null
@@ -150,68 +255,90 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
                               _isLocking = true;
                               _lockError = null;
                             });
-                            List<String> bookingIds = [];
+
                             try {
-                              // lock seats un par un
-                              for (var seat in selectedSeats) {
-                                final id = await _bookingService.lockSeat(
-                                    tripId: widget.trip.id, seatNumber: seat);
-                                bookingIds.add(id);
-                              }
+                              // Verrouillage transactionnel avec gestion atomique
+                              final bookingIds = await _bookingService.lockSeatsBatch(
+                                tripId: widget.trip.id,
+                                seatNumbers: selectedSeats,
+                              );
+
                               if (!mounted) return;
+
                               Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (_) => PaymentScreen(
-                                            trip: widget.trip,
-                                            seats: selectedSeats,
-                                            bookingIds: bookingIds,
-                                          )));
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => PaymentScreen(
+                                    trip: widget.trip,
+                                    seats: selectedSeats,
+                                    bookingIds: bookingIds,
+                                  ),
+                                ),
+                              );
                             } catch (e) {
-                              // liberer ce qui est déjà verrouille
-                              for (var id in bookingIds) {
-                                await _bookingService.releaseSeat(
-                                    bookingId: id);
-                              }
                               setState(() {
-                                _lockError = e.toString();
+                                _lockError = e.toString().replaceAll("Exception: ", "");
                               });
+                              // Actualisation immédiate pour afficher le siège pris par l'autre
+                              _loadOccupiedSeats();
                             } finally {
-                              setState(() {
-                                _isLocking = false;
-                              });
+                              if (mounted) {
+                                setState(() {
+                                  _isLocking = false;
+                                });
+                              }
                             }
                           },
                     style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0F172A),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30))),
+                      backgroundColor: const Color(0xFF0F172A),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                    ),
                     child: _isLocking
                         ? const SizedBox(
                             width: 24,
                             height: 24,
                             child: CircularProgressIndicator(
-                                color: Colors.white, strokeWidth: 2),
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
                           )
-                        : const Text("RÉSERVER & PAYER",
+                        : const Text(
+                            "RÉSERVER & PAYER",
                             style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white)),
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                            ),
+                          ),
                   ),
                 ),
-                if (_lockError != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    _lockError!,
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                ],
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _legendItem(Color color, String label) {
+    return Row(
+      children: [
+        Container(
+          width: 16,
+          height: 16,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white70, fontSize: 13),
+        ),
+      ],
     );
   }
 }

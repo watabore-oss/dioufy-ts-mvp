@@ -1,10 +1,12 @@
--- ===================================================================
--- SUPABASE SCHEMA INITIALIZATION SCRIPT FOR DIOUFY-TS MVP
--- ===================================================================
--- Copy & paste this entire script into Supabase SQL Editor at:
--- https://supabase.com/dashboard/project/yrarlatdoulyfyjpqzlp/sql/new
--- Then click "Run"
--- ===================================================================
+-- Supabase / Postgres schema for Dioufy-TS MVP
+-- IDEMPOTENCE STRATEGY:
+--   1. All mutations use either idempotency_key (payments) or request_id (lock_seat, release_seat)
+--   2. idempotent_requests table stores request_id + operation -> cached result
+--   3. Functions check cache first BEFORE modifying state
+--   4. On retry, the same booking/payment result is returned
+--   5. Old requests (>24h) are purged by expire_locks() cron job
+--
+-- This ensures exactly-once semantics even with network retries, webhook duplicates, or client errors.
 
 -- Enable useful extensions
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
@@ -23,7 +25,7 @@ CREATE TABLE IF NOT EXISTS app_users (
   phone text,
   email text,
   full_name text,
-  role text DEFAULT 'traveller',
+  role text DEFAULT 'traveller', -- traveller | driver | agency_staff | admin
   agency_id uuid REFERENCES agencies(id) ON DELETE SET NULL,
   fcm_token text,
   created_at timestamptz DEFAULT now()
@@ -48,7 +50,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   user_id uuid REFERENCES app_users(id) ON DELETE SET NULL,
   trip_id uuid REFERENCES trips(id) ON DELETE CASCADE,
   seats jsonb NOT NULL DEFAULT '[]'::jsonb,
-  status text NOT NULL DEFAULT 'pending',
+  status text NOT NULL DEFAULT 'pending', -- pending | paid | cancelled
   lock_expires_at timestamptz,
   agency_id uuid REFERENCES agencies(id) ON DELETE SET NULL,
   created_at timestamptz DEFAULT now()
@@ -59,7 +61,7 @@ CREATE TABLE IF NOT EXISTS seats (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   trip_id uuid REFERENCES trips(id) ON DELETE CASCADE,
   seat_number text NOT NULL,
-  status text NOT NULL DEFAULT 'available',
+  status text NOT NULL DEFAULT 'available', -- available | locked | sold
   lock_until timestamptz,
   locked_by uuid REFERENCES bookings(id) ON DELETE SET NULL,
   created_at timestamptz DEFAULT now(),
@@ -70,8 +72,8 @@ CREATE TABLE IF NOT EXISTS seats (
 CREATE TABLE IF NOT EXISTS idempotent_requests (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   request_id text NOT NULL,
-  operation text NOT NULL,
-  result jsonb NOT NULL,
+  operation text NOT NULL, -- 'lock_seat', 'payment', 'release_seat', etc.
+  result jsonb NOT NULL, -- the response to return on retry
   created_at timestamptz DEFAULT now(),
   UNIQUE (request_id, operation)
 );
@@ -83,7 +85,7 @@ CREATE TABLE IF NOT EXISTS payments (
   amount integer NOT NULL,
   provider text,
   provider_ref text,
-  status text NOT NULL DEFAULT 'pending',
+  status text NOT NULL DEFAULT 'pending', -- pending | successful | failed
   idempotency_key text NOT NULL,
   created_at timestamptz DEFAULT now(),
   UNIQUE (idempotency_key),
@@ -125,23 +127,34 @@ CREATE INDEX IF NOT EXISTS idx_bookings_trip ON bookings(trip_id);
 CREATE INDEX IF NOT EXISTS idx_idempotent_requests_lookup ON idempotent_requests(request_id, operation);
 CREATE INDEX IF NOT EXISTS idx_idempotent_requests_cleanup ON idempotent_requests(created_at);
 
+-- Row Level Security: enable per-table and provide sample policies
+
+-- Helper note: adjust the claim name used below to match your JWT claims.
+-- Supabase exposes JWT claims via current_setting('jwt.claims.<claim_name>', true)
+
 -- Enable RLS on tables that must be isolated per agency
 ALTER TABLE trips ENABLE ROW LEVEL SECURITY;
 ALTER TABLE seats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tickets ENABLE ROW LEVEL SECURITY;
 
--- Policy: allow service role (server-side) full read/write access
+-- Policies: allow service role (server-side) full access
 CREATE POLICY service_role_full_access ON trips FOR ALL USING ( current_setting('request.jwt.claims.role', true) = 'service_role' );
 CREATE POLICY service_role_full_access_bookings ON bookings FOR ALL USING ( current_setting('request.jwt.claims.role', true) = 'service_role' );
 CREATE POLICY service_role_full_access_seats ON seats FOR ALL USING ( current_setting('request.jwt.claims.role', true) = 'service_role' );
 CREATE POLICY service_role_full_access_tickets ON tickets FOR ALL USING ( current_setting('request.jwt.claims.role', true) = 'service_role' );
 
--- Atomic seat lock function with idempotence
+-- Policies: allow public read access for travellers (anon and authenticated)
+CREATE POLICY public_read_agencies ON agencies FOR SELECT USING (true);
+CREATE POLICY public_read_trips ON trips FOR SELECT USING (true);
+CREATE POLICY public_read_seats ON seats FOR SELECT USING (true);
+CREATE POLICY public_read_bookings ON bookings FOR SELECT USING (true);
+
+-- Atomic seat lock function with idempotence: uses request_id to guarantee exactly-once
 CREATE OR REPLACE FUNCTION lock_seat(
   p_trip_id uuid,
   p_seat_number text,
-  p_user_id uuid,
+  p_user_id uuid DEFAULT NULL,
   p_lock_minutes integer DEFAULT 10,
   p_request_id text DEFAULT NULL
 ) RETURNS uuid AS $$
@@ -164,16 +177,25 @@ BEGIN
     END IF;
   END IF;
 
-  -- find seat and lock row for update
+  -- find seat and lock row for update (or create it on the fly if not exists)
   SELECT id INTO v_seat_id FROM seats
     WHERE trip_id = p_trip_id AND seat_number = p_seat_number
     FOR UPDATE;
 
   IF v_seat_id IS NULL THEN
-    RAISE EXCEPTION 'Seat not found';
+    INSERT INTO seats (trip_id, seat_number, status)
+      VALUES (p_trip_id, p_seat_number, 'available')
+      ON CONFLICT (trip_id, seat_number) DO NOTHING
+      RETURNING id INTO v_seat_id;
+
+    IF v_seat_id IS NULL THEN
+      SELECT id INTO v_seat_id FROM seats
+        WHERE trip_id = p_trip_id AND seat_number = p_seat_number
+        FOR UPDATE;
+    END IF;
   END IF;
 
-  -- check availability
+  -- check availability (allow if available or locked but expired)
   PERFORM 1 FROM seats WHERE id = v_seat_id AND (
     status = 'available' OR (status = 'locked' AND (lock_until IS NULL OR lock_until < v_now))
   );
@@ -203,7 +225,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Release seat with idempotence
+-- Release seat with idempotence: safe to call multiple times
 CREATE OR REPLACE FUNCTION release_seat(
   p_booking_id uuid,
   p_request_id text DEFAULT NULL
@@ -250,3 +272,45 @@ BEGIN
   DELETE FROM idempotent_requests WHERE created_at < now() - INTERVAL '24 hours';
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ===================================================================
+-- SEED INITIAL (Données de démonstration pour MVP Dioufy-TS)
+-- ===================================================================
+DO $$
+BEGIN
+  -- Agences de transport
+  INSERT INTO agencies (id, name, metadata)
+    VALUES ('a0000000-0000-0000-0000-000000000001', 'Dioufy Trans', '{"verified": true}'::jsonb)
+    ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO agencies (id, name, metadata)
+    VALUES ('a0000000-0000-0000-0000-000000000002', 'Galsen Tour', '{"verified": true}'::jsonb)
+    ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO agencies (id, name, metadata)
+    VALUES ('a0000000-0000-0000-0000-000000000003', 'Touba Express', '{"verified": true}'::jsonb)
+    ON CONFLICT (id) DO NOTHING;
+
+  -- Trajets Dakar -> Thiès
+  INSERT INTO trips (id, agency_id, from_loc, to_loc, depart_at, price, seats_count, metadata)
+    VALUES ('t0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'Dakar', 'Thiès', now() + interval '2 hours', 7500, 36, '{"type": "CONFORT"}'::jsonb)
+    ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO trips (id, agency_id, from_loc, to_loc, depart_at, price, seats_count, metadata)
+    VALUES ('t0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000002', 'Dakar', 'Thiès', now() + interval '4 hours', 4500, 36, '{"type": "STANDARD"}'::jsonb)
+    ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO trips (id, agency_id, from_loc, to_loc, depart_at, price, seats_count, metadata)
+    VALUES ('t0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000001', 'Dakar', 'Thiès', now() + interval '6 hours', 8200, 36, '{"type": "CONFORT"}'::jsonb)
+    ON CONFLICT (id) DO NOTHING;
+
+  -- Trajets Dakar -> Touba
+  INSERT INTO trips (id, agency_id, from_loc, to_loc, depart_at, price, seats_count, metadata)
+    VALUES ('t0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', 'Dakar', 'Touba', now() + interval '3 hours', 12500, 36, '{"type": "CONFORT"}'::jsonb)
+    ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO trips (id, agency_id, from_loc, to_loc, depart_at, price, seats_count, metadata)
+    VALUES ('t0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000003', 'Dakar', 'Touba', now() + interval '5 hours', 9500, 36, '{"type": "STANDARD"}'::jsonb)
+    ON CONFLICT (id) DO NOTHING;
+END;
+$$;

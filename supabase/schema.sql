@@ -138,35 +138,23 @@ ALTER TABLE seats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tickets ENABLE ROW LEVEL SECURITY;
 
--- Policy: allow service role (server-side) full read/write access
-CREATE POLICY service_role_full_access ON trips
-  FOR ALL
-  USING ( current_setting('request.jwt.claims.role', true) = 'service_role' );
+-- Policies: allow service role (server-side) full access
+CREATE POLICY service_role_full_access ON trips FOR ALL USING ( current_setting('request.jwt.claims.role', true) = 'service_role' );
+CREATE POLICY service_role_full_access_bookings ON bookings FOR ALL USING ( current_setting('request.jwt.claims.role', true) = 'service_role' );
+CREATE POLICY service_role_full_access_seats ON seats FOR ALL USING ( current_setting('request.jwt.claims.role', true) = 'service_role' );
+CREATE POLICY service_role_full_access_tickets ON tickets FOR ALL USING ( current_setting('request.jwt.claims.role', true) = 'service_role' );
 
--- Policy: allow service role (server-side) full read/write access for bookings
-CREATE POLICY service_role_full_access_bookings ON bookings
-  FOR ALL
-  USING ( current_setting('request.jwt.claims.role', true) = 'service_role' );
-
--- Policy: allow service role (server-side) full read/write access for seats
-CREATE POLICY service_role_full_access_seats ON seats
-  FOR ALL
-  USING ( current_setting('request.jwt.claims.role', true) = 'service_role' );
-
--- Policy: allow service role (server-side) full read/write access for tickets
-CREATE POLICY service_role_full_access_tickets ON tickets
-  FOR ALL
-  USING ( current_setting('request.jwt.claims.role', true) = 'service_role' );
-
--- Note: These policies are starter samples for MVP. Expand with user/driver/agency isolation as needed.
-
-
+-- Policies: allow public read access for travellers (anon and authenticated)
+CREATE POLICY public_read_agencies ON agencies FOR SELECT USING (true);
+CREATE POLICY public_read_trips ON trips FOR SELECT USING (true);
+CREATE POLICY public_read_seats ON seats FOR SELECT USING (true);
+CREATE POLICY public_read_bookings ON bookings FOR SELECT USING (true);
 
 -- Atomic seat lock function with idempotence: uses request_id to guarantee exactly-once
 CREATE OR REPLACE FUNCTION lock_seat(
   p_trip_id uuid,
   p_seat_number text,
-  p_user_id uuid,
+  p_user_id uuid DEFAULT NULL,
   p_lock_minutes integer DEFAULT 10,
   p_request_id text DEFAULT NULL
 ) RETURNS uuid AS $$
@@ -189,13 +177,22 @@ BEGIN
     END IF;
   END IF;
 
-  -- find seat and lock row for update
+  -- find seat and lock row for update (or create it on the fly if not exists)
   SELECT id INTO v_seat_id FROM seats
     WHERE trip_id = p_trip_id AND seat_number = p_seat_number
     FOR UPDATE;
 
   IF v_seat_id IS NULL THEN
-    RAISE EXCEPTION 'Seat not found';
+    INSERT INTO seats (trip_id, seat_number, status)
+      VALUES (p_trip_id, p_seat_number, 'available')
+      ON CONFLICT (trip_id, seat_number) DO NOTHING
+      RETURNING id INTO v_seat_id;
+
+    IF v_seat_id IS NULL THEN
+      SELECT id INTO v_seat_id FROM seats
+        WHERE trip_id = p_trip_id AND seat_number = p_seat_number
+        FOR UPDATE;
+    END IF;
   END IF;
 
   -- check availability (allow if available or locked but expired)
@@ -275,3 +272,45 @@ BEGIN
   DELETE FROM idempotent_requests WHERE created_at < now() - INTERVAL '24 hours';
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ===================================================================
+-- SEED INITIAL (Données de démonstration pour MVP Dioufy-TS)
+-- ===================================================================
+DO $$
+BEGIN
+  -- Agences de transport
+  INSERT INTO agencies (id, name, metadata)
+    VALUES ('a0000000-0000-0000-0000-000000000001', 'Dioufy Trans', '{"verified": true}'::jsonb)
+    ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO agencies (id, name, metadata)
+    VALUES ('a0000000-0000-0000-0000-000000000002', 'Galsen Tour', '{"verified": true}'::jsonb)
+    ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO agencies (id, name, metadata)
+    VALUES ('a0000000-0000-0000-0000-000000000003', 'Touba Express', '{"verified": true}'::jsonb)
+    ON CONFLICT (id) DO NOTHING;
+
+  -- Trajets Dakar -> Thiès
+  INSERT INTO trips (id, agency_id, from_loc, to_loc, depart_at, price, seats_count, metadata)
+    VALUES ('t0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'Dakar', 'Thiès', now() + interval '2 hours', 7500, 36, '{"type": "CONFORT"}'::jsonb)
+    ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO trips (id, agency_id, from_loc, to_loc, depart_at, price, seats_count, metadata)
+    VALUES ('t0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000002', 'Dakar', 'Thiès', now() + interval '4 hours', 4500, 36, '{"type": "STANDARD"}'::jsonb)
+    ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO trips (id, agency_id, from_loc, to_loc, depart_at, price, seats_count, metadata)
+    VALUES ('t0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000001', 'Dakar', 'Thiès', now() + interval '6 hours', 8200, 36, '{"type": "CONFORT"}'::jsonb)
+    ON CONFLICT (id) DO NOTHING;
+
+  -- Trajets Dakar -> Touba
+  INSERT INTO trips (id, agency_id, from_loc, to_loc, depart_at, price, seats_count, metadata)
+    VALUES ('t0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', 'Dakar', 'Touba', now() + interval '3 hours', 12500, 36, '{"type": "CONFORT"}'::jsonb)
+    ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO trips (id, agency_id, from_loc, to_loc, depart_at, price, seats_count, metadata)
+    VALUES ('t0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000003', 'Dakar', 'Touba', now() + interval '5 hours', 9500, 36, '{"type": "STANDARD"}'::jsonb)
+    ON CONFLICT (id) DO NOTHING;
+END;
+$$;

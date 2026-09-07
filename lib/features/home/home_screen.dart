@@ -10,9 +10,24 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String selectedDestination = "Thiès"; // défaut
+  String selectedDeparture = "Dakar";
+  String selectedDestination = "Thiès";
 
-  final List<String> destinations = ["Thiès", "Touba"];
+  final List<String> departures = [
+    "Dakar",
+    "Thiès",
+    "Touba",
+    "Saint-Louis",
+    "Mbour",
+  ];
+
+  final List<String> destinations = [
+    "Thiès",
+    "Touba",
+    "Saint-Louis",
+    "Mbour",
+    "Dakar",
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -86,34 +101,51 @@ class _HomeScreenState extends State<HomeScreen> {
                           padding: const EdgeInsets.all(20),
                           child: Column(
                             children: [
-                              const TextField(
-                                decoration: InputDecoration(
-                                    labelText: "Départ",
-                                    hintText: "Dakar (Baux Maraîchers)"),
-                                readOnly: true,
+                              DropdownButtonFormField<String>(
+                                initialValue: selectedDeparture,
+                                items: departures
+                                    .map((city) => DropdownMenuItem(
+                                        value: city,
+                                        child: Text(
+                                            city == "Dakar" ? "Dakar (Baux Maraîchers)" : city)))
+                                    .toList(),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setState(() => selectedDeparture = val);
+                                  }
+                                },
+                                decoration: const InputDecoration(
+                                  labelText: "Gare de Départ",
+                                  prefixIcon: Icon(Icons.trip_origin, color: Color(0xFF1E3A8A)),
+                                ),
                               ),
                               const SizedBox(height: 12),
                               DropdownButtonFormField<String>(
-                                // `value` was deprecated in Flutter 3.33.0-1.0.pre;
-                                // use `initialValue` to set the field's starting value.
                                 initialValue: selectedDestination,
                                 items: destinations
                                     .map((city) => DropdownMenuItem(
                                         value: city, child: Text(city)))
                                     .toList(),
-                                onChanged: (val) =>
-                                    setState(() => selectedDestination = val!),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setState(() => selectedDestination = val);
+                                  }
+                                },
                                 decoration: const InputDecoration(
-                                    labelText: "Destination"),
+                                  labelText: "Destination",
+                                  prefixIcon: Icon(Icons.location_on, color: Color(0xFF059669)),
+                                ),
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 16),
                               ElevatedButton(
                                 onPressed: () {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
                                       builder: (_) => SearchResultsScreen(
-                                          destination: selectedDestination),
+                                        departure: selectedDeparture,
+                                        destination: selectedDestination,
+                                      ),
                                     ),
                                   );
                                 },
