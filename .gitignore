@@ -13,6 +13,7 @@ android/app/release
 # Supabase & Secrets
 .env
 .env*
+!.env.example
 API key token docs/
 doc project/
 *.docx
