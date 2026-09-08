@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dioufy Safe Delivery"
+  short_description: "Safe, modular delivery for Dioufy-TS."
+  default_prompt: "Analyze the requested Dioufy-TS change, assess impact and proportionality, then implement it safely with validation."
