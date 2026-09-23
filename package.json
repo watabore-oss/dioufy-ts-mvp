@@ -1,0 +1,22 @@
+{
+  "name": "dioufy-ts",
+  "version": "1.0.0",
+  "description": "Dioufy-TS - Gare Numérique & Transport Interurbain Sénégal (MVP)",
+  "scripts": {
+    "onwaneko": "powershell -NoProfile -ExecutionPolicy Bypass -File ./deploy/waneko/deploy-waneko.ps1",
+    "onflare": "powershell -NoProfile -ExecutionPolicy Bypass -File ./deploy/cloudflare/deploy-cloudflare.ps1",
+    "deploy:waneko": "npm run onwaneko",
+    "deploy:cloudflare": "npm run onflare",
+    "build:web": "powershell -NoProfile -ExecutionPolicy Bypass -File ./deploy/common/build-web.ps1"
+  },
+  "keywords": [
+    "flutter",
+    "senegal",
+    "transport",
+    "cloudflare",
+    "wanekoo",
+    "pwa"
+  ],
+  "author": "Dioufy-TS Team",
+  "license": "UNLICENSED"
+}

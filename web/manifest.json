@@ -1,11 +1,11 @@
 {
-    "name": "Dioufy-TS",
+    "name": "Dioufy-TS • Fo nek sa gare fek lafa",
     "short_name": "Dioufy-TS",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0F172A",
-    "theme_color": "#0F172A",
-    "description": "Dioufy-TS - Réservation de billets de transport interurbain au Sénégal (Fo nek sa gare fek lafa)",
+    "background_color": "#F8FAFC",
+    "theme_color": "#F8FAFC",
+    "description": "Dioufy-TS - Réservation instantanée de billets de transport interurbain au Sénégal (Fo nek sa gare fek lafa)",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

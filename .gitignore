@@ -27,4 +27,18 @@ doc project/
 *.iml
 .metadata_backup
 *_backup*
+# Deployment & Cloudflare
+.wrangler/
+deploy/**/waneko.env
+deploy/**/cloudflare.env
 *.zip
+
+# Secrets & OAuth
+Authentification google code/
+ai/error_logs/
+DIOUFY_TS_MASTER_CONFIG.md
+
+# Dependencies
+node_modules/
+capacitor-app/node_modules/
+

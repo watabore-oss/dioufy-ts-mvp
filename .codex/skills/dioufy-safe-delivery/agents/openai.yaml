@@ -1,0 +1,28 @@
+interface:
+  display_name: "Dioufy Safe Delivery"
+  short_description: "Garant d'intégrité logicielle, d'analyse d'impact et de livraison sécurisée pour Dioufy-TS."
+  default_model: "gpt-4o"
+
+policy:
+  language: "fr"
+  allow_git_push: false
+  currency: "FCFA"
+  currency_badge: "XOF"
+  forbid_currency_symbol: "$"
+  require_back_button: true
+  clean_error_logs: true
+
+triggers:
+  - "dioufy-safe-delivery"
+  - "safe-delivery"
+  - "audit-securite"
+  - "analyse-impact"
+  - "livraison-securisee"
+
+competencies:
+  - "transport_domain_modeling"
+  - "modular_monolith_flutter"
+  - "supabase_rls_hardening"
+  - "rbac_anti_privilege_escalation"
+  - "financial_integrity_ledger"
+  - "release_engineering_testing"

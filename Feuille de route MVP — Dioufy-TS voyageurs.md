@@ -424,3 +424,71 @@ Vérifications
 ✅ nl -ba supabase/schema.sql — vérification du modèle de trajets, sièges, réservations et des politiques RLS existantes. 
 
 ✅ nl -ba pubspec.yaml — vérification des dépendances déjà prévues pour paiement, QR code, scan et notifications. 
+--------------------------------------------------------------------------------------
+Phase 6 — Extensions Métier : Acteurs, Commissions & Assistance (Semaines 7 & 8)
+1. Nouveaux Profils d'Accès (RBAC Étendu)
+
+Partenaires Flotte / GIE Transporteurs : Espace de gestion pour piloter les véhicules engagés, suivre l'activité des chauffeurs affiliés et gérer les abonnements de leur flotte.
+
+Garagistes / Mécaniciens Partenaires : Interface dédiée pour recevoir les demandes de dépannage en urgence, consulter la localisation de la panne et valider les interventions effectuées.
+
+2. Système de Commissions Instantanées & Clôture de Caisse
+
+Portefeuille Virtuel (Chauffeurs & Coxeurs) : Crédit immédiat des commissions dès la validation d'une mission (fin de trajet pour le chauffeur, vente/embarquement d'un billet pour le coxeur).
+
+Option de Transfert Direct : Possibilité de retirer/transférer instantanément ces commissions vers leur compte Mobile Money ou portefeuille dédié.
+
+Clôture de Caisse Chauffeur : Tableau de bord récapitulant les encaissements en liquide, les paiements digitaux et les commissions perçues, calculant automatiquement le solde net à reverser.
+
+3. Contrôle des Billets Optimisé (Scanner & Import QR)
+
+Lecture Caméra en Temps Réel : Scan rapide du QR code du billet via l'objectif du téléphone.
+
+Import d'Image / QR Code : Module permettant d'uploader une capture d'écran ou une image de QR code depuis la galerie pour validation si l'écran du client est endommagé.
+
+Saisie Manuel en Secours : Alternative conservée uniquement en cas d'impossibilité de lecture optique.
+
+4. Module Marketplace Dépannage & Abonnement Garagiste
+
+Intermédiaire Dioufy-TS : Dioufy-TS agit comme plateforme de mise en relation de confiance entre les chauffeurs de la flotte et les garagistes souscrits.
+
+Offre « Pack Garagiste » : Les chauffeurs (ou gestionnaires de flotte) souscrivent un pack d'assistance auprès de Dioufy-TS.
+
+Signalement d'Urgence Géolocalisé : En cas de panne durant le trajet, le chauffeur déclenche une alerte via son application.
+
+Mise en Relation Locale : Notification transmise aux garagistes partenaires abonnés situés dans la zone/localité traversée pour un dépannage prioritaire sur le réseau.
+---------------------------------------------------------
+Module Super Admin & Vision Transports du Futur
+1. Paramétrage dynamique par le Super Admin
+
+Gestion des Paliers « Pack Garagiste » : Interface de configuration permettant de définir les formules (ex. Basic, Standard, Premium), les plafonds d'intervention, les zones de couverture autorisées et la récurrence de facturation (mensuelle/annuelle).
+
+Règles des Reversements & Mobile Money : Définition des délais de libération des fonds (instantané, H+24, hebdomadaire), des seuils d'encaissement minimum et des commissions retenues par la plateforme avant transfert vers Wave, Orange Money ou compte bancaire.
+
+Gestion centralisée de la Marketplace : Activation, suspension ou modération des comptes Garagistes, GIE et Chauffeurs.
+
+2. Architecture scalable & Préparation aux Transports du Futur
+
+Architecture MaaS (Mobility as a Service) & Intermodalité :   
+
+Modèle de données conçu pour la combinaison de trajets (ex. Navette locale + Bus interurbain + VTC / Micro-mobilité).
+
+API ouverte pour intégrer de futurs modes de transport (trains express, navettes autonomes, taxis volants eVTOL).
+
+Paiement Universel & Billettique Unifiée (Account-Based Ticketing - ABT) :
+
+Support du QR Code dynamique, du NFC (tap-to-pay via smartphone ou carte sans contact) et de l'intégration des Pass Mobilité régionaux.
+
+Tarification dynamique automatisée par IA en fonction de la demande, du profil passager et de la période.
+
+IoT, Télématique & Gestion Intelligent de Flotte (Smart Fleet) :   
+
+Prise en charge des données télématiques des véhicules (niveau de batterie pour flottes électriques, usure mécanique, diagnostic moteur en temps réel).
+
+Maintenance prédictive : Déclenchement automatique d'alertes dépannage avant la panne sèche ou la casse mécanique en analysant les capteurs IoT du véhicule.   
+
+Optimisation des flux & Smart Routing :   
+
+Gestion des arrêts à la demande (Demand-Responsive Transport - DRT) et ajustement temps réel des itinéraires selon le trafic et les données météo/route.
+
+Suivi du taux d'occupation des véhicules en temps réel via comptage automatique des passagers (APC).

@@ -1,6 +1,7 @@
 # ----------------------------------------------------------------------
 # Configuration Apache / cPanel - Dioufy-TS (https://dioufy-ts.sn/)
 # ----------------------------------------------------------------------
+DirectoryIndex index.html index.php
 
 # 1. Forcer la redirection HTTPS
 <IfModule mod_rewrite.c>

@@ -1,0 +1,5 @@
+# ----------------------------------------------------------------------
+# Routage SPA Cloudflare Pages - Dioufy-TS
+# Toutes les sous-routes non-statiques sont renvoyées vers /index.html (Code 200)
+# ----------------------------------------------------------------------
+/*    /index.html   200

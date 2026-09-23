@@ -1,0 +1,8 @@
+﻿{
+  "appId": "com.dioufy.app",
+  "appName": "Dioufy-TS",
+  "webDir": "../build/web",
+  "server": {
+    "androidScheme": "https"
+  }
+}

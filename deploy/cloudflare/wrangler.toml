@@ -1,0 +1,19 @@
+# ==============================================================================
+# Configuration Wrangler • Cloudflare Pages & Workers Dioufy-TS
+# ==============================================================================
+name = "dioufy-ts"
+compatibility_date = "2024-09-23"
+
+# Configuration Cloudflare Pages
+pages_build_output_dir = "../../build/web"
+
+# Configuration Cloudflare Worker Reverse Proxy (auth.dioufy-ts.sn -> Supabase)
+[env.worker]
+name = "auth-dioufy-ts-proxy"
+main = "../../cloudflare/worker_auth_proxy.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+SUPABASE_HOSTNAME = "yrarlatdoulyfyjpqzlp.supabase.co"
+AUTH_DOMAIN = "auth.dioufy-ts.sn"

@@ -8,6 +8,14 @@ class Trip {
   final String type; // "CONFORT" ou "STANDARD"
   final int seatsLeft;
   final int seatsCount;
+  final String duration;
+  final String departureStation;
+  final String arrivalStation;
+  final String date;
+  final List<String> amenities;
+
+  /// Symbole monétaire officiel en zone UEMOA
+  String get currency => "FCFA";
 
   const Trip({
     required this.id,
@@ -19,6 +27,11 @@ class Trip {
     required this.type,
     required this.seatsLeft,
     this.seatsCount = 36,
+    this.duration = "2h 00m",
+    this.departureStation = "Gare des Baux Maraîchers",
+    this.arrivalStation = "Gare d'arrivée",
+    this.date = "Aujourd'hui",
+    this.amenities = const ["Climatisation", "Ceinture", "Prise USB"],
   });
 
   /// Construit un objet [Trip] depuis un enregistrement Supabase ou local
@@ -96,6 +109,19 @@ class Trip {
       type: type,
       seatsLeft: calculatedSeatsLeft,
       seatsCount: seatsCount,
+      duration: map['duration']?.toString() ?? "2h 00m",
+      departureStation: map['departure_station']?.toString() ??
+          (map['from_loc']?.toString().toLowerCase().contains('dakar') == true
+              ? "Gare des Baux Maraîchers"
+              : "Gare Centrale"),
+      arrivalStation: map['arrival_station']?.toString() ??
+          (map['to_loc']?.toString().toLowerCase().contains('touba') == true
+              ? "Gare Ouest Touba"
+              : "Gare Routière"),
+      date: map['date']?.toString() ?? "Aujourd'hui",
+      amenities: map['amenities'] is List
+          ? (map['amenities'] as List).map((e) => e.toString()).toList()
+          : const ["Climatisation", "Ceinture", "Prise USB"],
     );
   }
 
@@ -110,6 +136,11 @@ class Trip {
       'type': type,
       'seatsLeft': seatsLeft,
       'seatsCount': seatsCount,
+      'duration': duration,
+      'departureStation': departureStation,
+      'arrivalStation': arrivalStation,
+      'date': date,
+      'amenities': amenities,
     };
   }
 }

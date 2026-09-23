@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <!--
     If you are serving your web app in a path other than the root, change the
     href value below to reflect the base path you are serving from.
@@ -20,28 +20,108 @@
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="Dioufy-TS - Réservation instantanée de billets de transport interurbain au Sénégal (Dakar, Thiès, Touba, Saint-Louis, Mbour...). Fo nek sa gare fek lafa.">
-  <meta name="theme-color" content="#0F172A">
+  <meta name="theme-color" content="#F8FAFC">
 
   <!-- OpenGraph / Réseaux sociaux & WhatsApp -->
   <meta property="og:title" content="Dioufy-TS • Fo nek sa gare fek lafa">
   <meta property="og:description" content="Réservez vos billets de bus et minibus interurbains au Sénégal avec choix du siège et billet QR Code sécurisé.">
   <meta property="og:url" content="https://dioufy-ts.sn/">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="assets/assets/logo.jpeg">
+  <meta property="og:image" content="logo.png">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Dioufy-TS">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <!-- Favicon officiel Dioufy-TS -->
+  <link rel="icon" type="image/x-icon" href="favicon.ico?v=4"/>
+  <link rel="icon" type="image/png" href="favicon.ico?v=4"/>
+  <link rel="shortcut icon" href="favicon.ico?v=4"/>
 
   <title>Dioufy-TS • Fo nek sa gare fek lafa</title>
   <link rel="manifest" href="manifest.json">
 </head>
-<body>
+<body style="margin:0;padding:0;background-color:#F8FAFC;overflow:hidden;">
+  <div id="loading" style="position:fixed;top:0;left:0;right:0;bottom:0;background-color:#F8FAFC;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0F172A;padding:20px;text-align:center;transition:opacity 0.5s ease-out;">
+    <img src="logo.png" onerror="if(this.src.indexOf('assets/logo.png')===-1)this.src='assets/logo.png'" alt="Dioufy-TS" style="width:88px;height:88px;border-radius:50%;object-fit:cover;margin-bottom:16px;box-shadow:0 10px 25px rgba(29,78,216,0.18);border:2.5px solid #1D4ED8;">
+    <h1 style="font-size:26px;font-weight:800;margin:0 0 6px 0;letter-spacing:0.5px;color:#0F172A;">Dioufy-TS</h1>
+    <p style="font-size:15px;color:#334155;margin:0 0 28px 0;font-style:italic;font-weight:600;">Fo nek sa gare fek lafa</p>
+    <div style="width:38px;height:38px;border:3px solid rgba(29,78,216,0.15);border-top-color:#1D4ED8;border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:18px;"></div>
+    <p id="loading-msg" style="font-size:14px;font-weight:500;color:#64748B;margin:0;">Préparation de votre gare numérique...</p>
+  </div>
+
+  <style>
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+
+  <script>
+    // Fonction universelle pour masquer le loader proprement sans flash
+    function dismissDioufyLoader() {
+      var loader = document.getElementById('loading');
+      if (loader && loader.style.opacity !== '0') {
+        loader.style.opacity = '0';
+        loader.style.pointerEvents = 'none';
+        setTimeout(function() {
+          if (loader && loader.parentNode) {
+            loader.parentNode.removeChild(loader);
+          }
+          // Rétablir le scroll une fois Flutter monté
+          document.body.style.overflow = '';
+        }, 500);
+      }
+    }
+
+    // Masquage synchronisé : attendre que Flutter ait injecté la vue ET peint le premier frame
+    var observer = new MutationObserver(function() {
+      var flt = document.querySelector('flutter-view') || document.querySelector('flt-glass-pane') || document.querySelector('flt-scene-host');
+      if (flt) {
+        // Laisser 800ms à Flutter pour initialiser CanvasKit/Skia et peindre l'écran
+        setTimeout(function() {
+          dismissDioufyLoader();
+        }, 800);
+        observer.disconnect();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // Sécurité absolue : libérer les clics après 4s et masquer totalement après 6s
+    setTimeout(function() {
+      var loader = document.getElementById('loading');
+      if (loader) {
+        loader.style.pointerEvents = 'none';
+      }
+    }, 4000);
+
+    setTimeout(function() {
+      dismissDioufyLoader();
+    }, 6500);
+
+    // Gestionnaire universel de retour arrière Android & Navigateur
+    window.dioufyHandleBackButton = function() {
+      if (typeof window.dioufyFlutterBackHandler === 'function') {
+        try {
+          var res = window.dioufyFlutterBackHandler();
+          if (res === true || res === 'true') return 'true';
+        } catch (e) {
+          console.warn('Erreur dioufyFlutterBackHandler:', e);
+        }
+      }
+      if (window.history && window.history.length > 1) {
+        window.history.back();
+        return 'true';
+      }
+      return 'false';
+    };
+  </script>
+
+  <!-- Moteur QR Universel Dioufy-TS (jsQR local 100% offline + Caméra durcie iOS/Android) -->
+  <script src="jsQR.min.js"></script>
+  <script src="dioufy_qr_engine.js"></script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

@@ -1,4 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.FLASHLIGHT" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
     <application
         android:label="dioufy_ts_mvp"
         android:name="${applicationName}"
@@ -24,12 +31,24 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Deep linking pour Supabase OAuth (Google), confirmation et réinitialisation de mot de passe -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.dioufy.app" android:host="login-callback" />
+                <data android:scheme="com.dioufy.app" android:host="reset-password" />
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Désactive Impeller sur Android pour éliminer le bug d'écran noir avec CameraX / SurfaceView -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
