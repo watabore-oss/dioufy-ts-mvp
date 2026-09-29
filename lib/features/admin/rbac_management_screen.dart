@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme.dart';
 import '../../core/permissions/app_role.dart';
 import '../../core/permissions/app_permission.dart';
@@ -454,6 +455,26 @@ class _RbacManagementScreenState extends State<RbacManagementScreen> {
     );
   }
 
+  static String _generateSecureTempPassword() {
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lower = 'abcdefghjkmnpqrstuvwxyz';
+    const digits = '23456789';
+    const special = '!@#%*';
+    final rand = Random.secure();
+    final chars = [
+      upper[rand.nextInt(upper.length)],
+      lower[rand.nextInt(lower.length)],
+      digits[rand.nextInt(digits.length)],
+      special[rand.nextInt(special.length)],
+    ];
+    const all = upper + lower + digits + special;
+    for (int i = 0; i < 6; i++) {
+      chars.add(all[rand.nextInt(all.length)]);
+    }
+    chars.shuffle(rand);
+    return chars.join();
+  }
+
   static void showCreateUserDialog(BuildContext context) {
     final currentRole = AuthService.instance.currentRole;
     final eligibleRoles = AppRole.values.where((r) => currentRole.canManageRole(r)).toList();
@@ -475,11 +496,31 @@ class _RbacManagementScreenState extends State<RbacManagementScreen> {
     final nameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
-    final passCtrl = TextEditingController(text: 'Dioufy@${Random().nextInt(9000) + 1000}!');
+    final passCtrl = TextEditingController(text: _generateSecureTempPassword());
     final vehicleCtrl = TextEditingController();
     final stationCtrl = TextEditingController();
-    String? selectedGieId = 'gie_thies';
+    String? selectedGieId;
+    List<Map<String, dynamic>> organizations = [];
+    bool isLoadingOrgs = true;
     bool isSubmitting = false;
+
+    // Chargement dynamique des organisations depuis Supabase
+    Supabase.instance.client
+        .from('organizations')
+        .select('id, name, code')
+        .eq('is_active', true)
+        .order('name')
+        .then((data) {
+      final list = List<Map<String, dynamic>>.from(data);
+      organizations = list;
+      isLoadingOrgs = false;
+      if (list.isNotEmpty && selectedGieId == null) {
+        selectedGieId = list.first['id'] as String?;
+      }
+    }).catchError((e) {
+      debugPrint('[RBAC] Erreur chargement organisations : $e');
+      isLoadingOrgs = false;
+    });
 
     final formKey = GlobalKey<FormState>();
 
@@ -601,7 +642,7 @@ class _RbacManagementScreenState extends State<RbacManagementScreen> {
                         controller: emailCtrl,
                         keyboardType: TextInputType.emailAddress,
                         decoration: InputDecoration(
-                          labelText: 'Adresse E-mail',
+                          labelText: 'Adresse E-mail (Optionnelle)',
                           hintText: 'agent@dioufy-ts.sn',
                           prefixIcon: const Icon(Icons.email_outlined, size: 20),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -610,29 +651,49 @@ class _RbacManagementScreenState extends State<RbacManagementScreen> {
                       ),
                       const SizedBox(height: 14),
 
-                      // 5. Champs conditionnels GIE
+                      // 5. Champs conditionnels GIE dynamiques
                       if (isGieRelated) ...[
                         const Text(
                           'Coopérative GIE de Rattachement :',
                           style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF334155)),
                         ),
                         const SizedBox(height: 6),
-                        DropdownButtonFormField<String>(
-                          value: selectedGieId,
-                          decoration: InputDecoration(
-                            prefixIcon: const Icon(Icons.business_outlined, color: Color(0xFF059669), size: 20),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        if (isLoadingOrgs)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: Row(
+                              children: [
+                                SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                                SizedBox(width: 10),
+                                Text('Chargement des coopératives GIE...', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                              ],
+                            ),
+                          )
+                        else
+                          DropdownButtonFormField<String>(
+                            value: (selectedGieId != null && organizations.any((o) => o['id'] == selectedGieId))
+                                ? selectedGieId
+                                : (organizations.isNotEmpty ? organizations.first['id'] as String : null),
+                            decoration: InputDecoration(
+                              prefixIcon: const Icon(Icons.business_outlined, color: Color(0xFF059669), size: 20),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            ),
+                            items: organizations.map((org) {
+                              return DropdownMenuItem<String>(
+                                value: org['id'] as String,
+                                child: Text(
+                                  org['name']?.toString() ?? 'GIE',
+                                  style: const TextStyle(fontSize: 13.5),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) setDialogState(() => selectedGieId = val);
+                            },
+                            validator: (v) => (isGieRelated && (v == null || v.isEmpty)) ? 'Veuillez sélectionner un GIE' : null,
                           ),
-                          items: const [
-                            DropdownMenuItem(value: 'gie_thies', child: Text('GIE Thiès Transport Express')),
-                            DropdownMenuItem(value: 'gie_ndiambour', child: Text('GIE Ndiambour Louga')),
-                            DropdownMenuItem(value: 'gie_dakar_bm', child: Text('GIE Gare Baux Maraîchers Dakar')),
-                          ],
-                          onChanged: (val) {
-                            if (val != null) setDialogState(() => selectedGieId = val);
-                          },
-                        ),
                         const SizedBox(height: 14),
                       ],
 
@@ -666,7 +727,7 @@ class _RbacManagementScreenState extends State<RbacManagementScreen> {
                         const SizedBox(height: 14),
                       ],
 
-                      // 8. Mot de passe initial
+                      // 8. Mot de passe initial sécurisé
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
@@ -690,7 +751,7 @@ class _RbacManagementScreenState extends State<RbacManagementScreen> {
                             ),
                             onPressed: () {
                               setDialogState(() {
-                                passCtrl.text = 'Dioufy@${Random().nextInt(9000) + 1000}!';
+                                passCtrl.text = _generateSecureTempPassword();
                               });
                             },
                             child: const Text('Générer', style: TextStyle(fontSize: 12)),
@@ -720,13 +781,15 @@ class _RbacManagementScreenState extends State<RbacManagementScreen> {
                         if (!formKey.currentState!.validate()) return;
                         setDialogState(() => isSubmitting = true);
 
+                        final effectiveOrgId = isGieRelated ? selectedGieId : null;
+
                         final res = await AuthService.instance.createManagedUser(
                           fullName: nameCtrl.text.trim(),
                           email: emailCtrl.text.trim(),
                           phone: phoneCtrl.text.trim(),
                           password: passCtrl.text.trim(),
                           role: selectedRole,
-                          organizationId: isGieRelated ? selectedGieId : null,
+                          organizationId: effectiveOrgId,
                         );
 
                         setDialogState(() => isSubmitting = false);
@@ -736,8 +799,9 @@ class _RbacManagementScreenState extends State<RbacManagementScreen> {
                           Navigator.pop(ctx);
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Compte [${selectedRole.name}] créé avec succès pour ${nameCtrl.text.trim()} !'),
+                              content: Text('Compte [${selectedRole.name}] provisionné avec succès pour ${nameCtrl.text.trim()} !'),
                               backgroundColor: const Color(0xFF059669),
+                              duration: const Duration(seconds: 4),
                             ),
                           );
                         } else {
@@ -745,6 +809,7 @@ class _RbacManagementScreenState extends State<RbacManagementScreen> {
                             SnackBar(
                               content: Text(res['message']?.toString() ?? 'Erreur lors de la création.'),
                               backgroundColor: DioufyColors.coral,
+                              duration: const Duration(seconds: 4),
                             ),
                           );
                         }

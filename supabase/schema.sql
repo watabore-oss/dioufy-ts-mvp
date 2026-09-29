@@ -1,4 +1,12 @@
--- Supabase / Postgres schema for Dioufy-TS MVP
+-- ==============================================================================
+-- ⚠️ ATTENTION : CE FICHIER EST UN SCHÉMA HISTORIQUE / DÉPRÉCIÉ
+-- La source de vérité unique pour la structure de base de données et le RBAC
+-- se trouve désormais dans le dossier : supabase/migrations/
+-- Dernières migrations actives :
+--   - 20260928_auth_rbac_robust_refactor.sql
+--   - 20260929_fix_managed_user_auth_and_hardening.sql
+-- ==============================================================================
+-- Supabase / Postgres schema for Dioufy-TS MVP (Ancienne Version)
 -- IDEMPOTENCE STRATEGY:
 --   1. All mutations use either idempotency_key (payments) or request_id (lock_seat, release_seat)
 --   2. idempotent_requests table stores request_id + operation -> cached result

@@ -298,27 +298,21 @@ class AuthService extends ChangeNotifier {
         final normalized = _normalizeSenegalPhone(trimmedLogin);
 
         try {
-          final userRow = await client
-              .from('app_users')
-              .select('email')
-              .or('phone.eq.$trimmedLogin,phone.eq.$normalized,phone.ilike.%$digits%')
-              .limit(1)
-              .maybeSingle();
+          // 1. Appel de la RPC sécurisée lookup_email_by_phone (contourne le verrouillage RLS anon)
+          final emailRes = await client.rpc(
+            'lookup_email_by_phone',
+            params: {'p_phone': normalized},
+          );
 
-          if (userRow != null &&
-              userRow['email'] != null &&
-              (userRow['email'] as String).isNotEmpty) {
-            effectiveEmail = userRow['email'] as String;
+          if (emailRes != null && emailRes.toString().trim().isNotEmpty) {
+            effectiveEmail = emailRes.toString().trim();
           } else {
-            _lastAuthError =
-                'Aucun compte associé à ce numéro de téléphone. Veuillez vérifier votre saisie ou vous connecter par code SMS.';
-            return false;
+            // 2. Fallback technique : format email standard auto-généré pour les comptes créés par téléphone
+            effectiveEmail = 'user.${digits.length >= 9 ? digits : extractDigits(normalized)}@dioufy-ts.sn';
           }
         } catch (e) {
-          debugPrint('[AuthService] Recherche e-mail associé : $e');
-          _lastAuthError =
-              'Impossible de retrouver le compte associé à ce numéro. Veuillez utiliser votre e-mail ou le code SMS.';
-          return false;
+          debugPrint('[AuthService] RPC lookup_email_by_phone non disponible, fallback direct : $e');
+          effectiveEmail = 'user.${digits.length >= 9 ? digits : extractDigits(normalized)}@dioufy-ts.sn';
         }
       }
 
