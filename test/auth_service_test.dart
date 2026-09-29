@@ -14,86 +14,63 @@ void main() {
     await AuthService.instance.initialize();
   });
 
-  group('AuthService & Session Management', () {
+  group('AuthService & Session Management (Production Architecture)', () {
     test('Default session is guest traveler (without account)', () {
       expect(AuthService.instance.isLoggedIn, isFalse);
       expect(AuthService.instance.isGuest, isTrue);
       expect(AuthService.instance.currentRole, AppRole.passenger);
     });
 
-    test('Continue as guest preserves guest traveler mode', () {
+    test('Continue as guest preserves guest traveler mode and passenger RBAC', () {
       AuthService.instance.continueAsGuest();
       expect(AuthService.instance.isGuest, isTrue);
-      expect(AuthService.instance.isSuperAdmin, isFalse);
-    });
-
-    test('Login as Super Admin dev role synchronizes RBAC and grants sovereign rights', () async {
-      final success = await AuthService.instance.loginAsDevRole(AppRole.superAdmin);
-      expect(success, isTrue);
-      expect(AuthService.instance.isLoggedIn, isTrue);
-      expect(AuthService.instance.isSuperAdmin, isTrue);
-      expect(AuthService.instance.currentRole, AppRole.superAdmin);
-
-      // Vérifie la synchronisation immédiate avec RbacService
-      expect(RbacService.instance.currentRole, AppRole.superAdmin);
-      expect(
-        RbacService.instance.hasPermission(AppPermission.rbacManagePermissions),
-        isTrue,
-      );
-      expect(
-        RbacService.instance.hasPermission(AppPermission.rbacManageSuperAdmins),
-        isTrue,
-      );
-    });
-
-    test('Login as Driver role synchronizes RBAC for chauffeur operations', () async {
-      final success = await AuthService.instance.loginAsDevRole(AppRole.driver);
-      expect(success, isTrue);
-      expect(AuthService.instance.currentRole, AppRole.driver);
-      expect(AuthService.instance.isSuperAdmin, isFalse);
-
-      // Chauffeur a le droit de voir ses véhicules et de clôturer sa caisse
-      expect(
-        RbacService.instance.hasPermission(AppPermission.fleetViewVehicles),
-        isTrue,
-      );
-      expect(
-        RbacService.instance.hasPermission(AppPermission.cashCloseSession),
-        isTrue,
-      );
-
-      // Mais n a PAS le droit d administrer le RBAC
-      expect(
-        RbacService.instance.hasPermission(AppPermission.rbacManagePermissions),
-        isFalse,
-      );
-    });
-
-    test('Logout clears session and resets to guest passenger', () async {
-      await AuthService.instance.loginAsDevRole(AppRole.superAdmin);
-      expect(AuthService.instance.isSuperAdmin, isTrue);
-
-      await AuthService.instance.logout();
       expect(AuthService.instance.isLoggedIn, isFalse);
-      expect(AuthService.instance.isGuest, isTrue);
+      expect(AuthService.instance.isSuperAdmin, isFalse);
       expect(AuthService.instance.currentRole, AppRole.passenger);
-      expect(
-        RbacService.instance.hasPermission(AppPermission.rbacManagePermissions),
-        isFalse,
-      );
     });
 
-    test('Phone OTP login flow (+221 Senegal) authenticates passenger', () async {
-      final sent = await AuthService.instance.signInWithPhoneOtp(phone: '77 469 13 79');
-      expect(sent, isTrue);
+    test('Login with empty credentials fails immediately', () async {
+      final success = await AuthService.instance.loginWithCredentials(
+        login: '',
+        password: '',
+      );
+      expect(success, isFalse);
+      expect(AuthService.instance.lastAuthError, isNotNull);
+    });
 
-      final verified = await AuthService.instance.verifyPhoneOtp(
+    test('Local admin bypass and hardcoded passwords do NOT grant login', () async {
+      // Vérification que les anciens contournements locaux sont strictement rejetés
+      final success = await AuthService.instance.loginWithCredentials(
+        login: '774787145',
+        password: 'Dioufy2026!',
+      );
+      // Sans backend Supabase connecté en test unitaire, la connexion locale n'est plus accordée
+      expect(success, isFalse);
+      expect(AuthService.instance.isLoggedIn, isFalse);
+    });
+
+    test('Demo phone numbers do NOT grant roles locally', () async {
+      final driverSuccess = await AuthService.instance.loginWithCredentials(
+        login: '772345678',
+        password: 'Dioufy2026!',
+      );
+      expect(driverSuccess, isFalse);
+      expect(AuthService.instance.currentRole, AppRole.passenger);
+    });
+
+    test('OTP SMS test codes 123456 and 2026 are rejected without Supabase validation', () async {
+      final verified1 = await AuthService.instance.verifyPhoneOtp(
         phone: '77 469 13 79',
         token: '123456',
       );
-      expect(verified, isTrue);
-      expect(AuthService.instance.isLoggedIn, isTrue);
-      expect(AuthService.instance.currentUser.phone, '+221774691379');
+      expect(verified1, isFalse);
+
+      final verified2 = await AuthService.instance.verifyPhoneOtp(
+        phone: '77 469 13 79',
+        token: '2026',
+      );
+      expect(verified2, isFalse);
+      expect(AuthService.instance.isLoggedIn, isFalse);
     });
 
     test('Reset password with unverified phone OTP is securely rejected', () async {
@@ -102,7 +79,6 @@ void main() {
         token: '000000',
         newPassword: 'NouveauPass2026!',
       );
-      // Règle de sécurité stricte : sans validation serveur cryptographique, tout OTP arbitraire est rejeté
       expect(resetOk, isFalse);
     });
 
@@ -110,28 +86,20 @@ void main() {
       final shortPass = await AuthService.instance.updatePassword(newPassword: '123');
       expect(shortPass, isFalse);
 
-      // Sans session active Supabase connectée, le mot de passe ne peut être falsifié
+      // Sans session active Supabase, le mot de passe ne peut être falsifié
       final unauthenticatedPass = await AuthService.instance.updatePassword(newPassword: 'SolidePass2026!');
       expect(unauthenticatedPass, isFalse);
     });
 
-    test('Dev login covers all 8 Dioufy-TS roles seamlessly', () async {
-      final allRoles = [
-        AppRole.superAdmin,
-        AppRole.platformAdmin,
-        AppRole.gieAdmin,
-        AppRole.gieAgent,
-        AppRole.driver,
-        AppRole.coxeur,
-        AppRole.mechanic,
-        AppRole.passenger,
-      ];
-
-      for (final role in allRoles) {
-        final ok = await AuthService.instance.loginAsDevRole(role);
-        expect(ok, isTrue);
-        expect(AuthService.instance.currentRole, role);
-      }
+    test('Logout clears session, clears RBAC and resets to guest passenger', () async {
+      await AuthService.instance.logout();
+      expect(AuthService.instance.isLoggedIn, isFalse);
+      expect(AuthService.instance.isGuest, isTrue);
+      expect(AuthService.instance.currentRole, AppRole.passenger);
+      expect(
+        RbacService.instance.hasPermission(AppPermission.rbacManagePermissions),
+        isFalse,
+      );
     });
   });
 }

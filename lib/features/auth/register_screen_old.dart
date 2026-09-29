@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/dioufy_tokens.dart';
 import '../../core/widgets/desktop_split_scaffold.dart';
+import '../../core/permissions/app_role.dart';
 import '../../services/auth_service.dart';
 
 /// Écran d'Ouverture de Compte Voyageur (Passager) adaptatif Desktop Split Screen
@@ -18,6 +19,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  final AppRole _selectedRole = AppRole.passenger;
   bool _isLoading = false;
 
   @override
@@ -38,6 +40,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       phone: _phoneController.text.trim(),
       email: _emailController.text.trim().isNotEmpty ? _emailController.text.trim() : null,
       password: _passwordController.text,
+      role: _selectedRole,
     );
     setState(() => _isLoading = false);
 
