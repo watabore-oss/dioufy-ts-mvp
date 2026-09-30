@@ -558,9 +558,13 @@ class AuthService extends ChangeNotifier {
   Future<bool> resetPasswordForEmail({required String email}) async {
     try {
       final client = Supabase.instance.client;
+      final redirectUrl = kIsWeb
+          ? '${Uri.base.origin}/#/reset-password'
+          : 'com.dioufy.app://reset-password';
+
       await client.auth.resetPasswordForEmail(
         email.trim(),
-        redirectTo: kIsWeb ? null : 'com.dioufy.app://reset-password',
+        redirectTo: redirectUrl,
       );
       return true;
     } catch (e) {

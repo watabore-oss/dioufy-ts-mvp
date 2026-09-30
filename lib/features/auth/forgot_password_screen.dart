@@ -366,19 +366,64 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 ),
               ),
             ] else if (_currentStep == 2) ...[
-              // Étape 2 : Saisie du code OTP
-              const Text(
-                'Entrez le code de vérification',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: DioufyColors.primaryDark),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                _isPhoneMode
-                    ? 'Un code à 6 chiffres a été envoyé par SMS au ${_phoneController.text}.'
-                    : 'Un code à 6 chiffres a été envoyé par Email à ${_emailController.text}.',
-                style: const TextStyle(color: Colors.black54, fontSize: 13),
-              ),
-              const SizedBox(height: 16),
+              // Étape 2 : Saisie du code OTP ou validation du lien email
+              if (!_isPhoneMode) ...[
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFBFDBFE)),
+                  ),
+                  child: Column(
+                    children: [
+                      const Icon(Icons.mark_email_read_outlined, color: DioufyColors.primary, size: 36),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Lien de Réinitialisation Envoyé !',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: DioufyColors.primaryDark),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Un e-mail officiel Dioufy-TS contenant votre lien sécurisé vient d\'être envoyé à ${_emailController.text}.\n\nCliquez directement sur « Réinitialiser mon mot de passe » dans votre boîte de réception.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Color(0xFF334155), fontSize: 13, height: 1.4),
+                      ),
+                      const SizedBox(height: 14),
+                      ElevatedButton.icon(
+                        onPressed: () => Navigator.pushNamed(context, '/reset-password'),
+                        icon: const Icon(Icons.lock_open, size: 18),
+                        label: const Text('J\'AI CLIQUÉ SUR LE LIEN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: DioufyColors.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Center(
+                  child: Text(
+                    '— OU si vous avez reçu un code numérique —',
+                    style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                const SizedBox(height: 14),
+              ] else ...[
+                const Text(
+                  'Entrez le code SMS de vérification',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: DioufyColors.primaryDark),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Un code à 6 chiffres a été envoyé par SMS au ${_phoneController.text}.',
+                  style: const TextStyle(color: Colors.black54, fontSize: 13),
+                ),
+              ],
+              const SizedBox(height: 14),
               TextField(
                 controller: _otpController,
                 keyboardType: TextInputType.number,
@@ -412,7 +457,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               TextButton(
                 onPressed: _handleSendCode,
                 child: Text(
-                  _isPhoneMode ? 'Renvoyer un nouveau code par SMS' : 'Renvoyer un nouveau code par Email',
+                  _isPhoneMode ? 'Renvoyer un nouveau code par SMS' : 'Renvoyer l\'email de réinitialisation',
                   style: const TextStyle(color: DioufyColors.primary),
                 ),
               ),

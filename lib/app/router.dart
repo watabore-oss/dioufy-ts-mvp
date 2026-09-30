@@ -10,6 +10,7 @@ import '../features/admin/rbac_management_screen.dart';
 import '../features/admin/super_admin_dashboard_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/register_screen.dart';
+import '../features/auth/reset_password_screen.dart';
 import '../features/coxeur/coxeur_dashboard_screen.dart';
 import '../features/gie/gie_dashboard_screen.dart';
 import '../features/passenger/passenger_dashboard_screen.dart';
@@ -31,6 +32,7 @@ class AppRouter {
   static const String garageAssistance = '/garage-assistance';
   static const String rbacManagement = '/admin/rbac';
   static const String superAdminDashboard = '/admin/dashboard';
+  static const String resetPassword = '/reset-password';
 
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -42,6 +44,9 @@ class AppRouter {
 
       case register:
         return MaterialPageRoute(builder: (_) => const RegisterScreen());
+
+      case resetPassword:
+        return MaterialPageRoute(builder: (_) => const ResetPasswordScreen());
 
       case superAdminDashboard:
         return MaterialPageRoute(builder: (_) => const SuperAdminDashboardScreen());
