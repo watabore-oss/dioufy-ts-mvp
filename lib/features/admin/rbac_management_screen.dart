@@ -8,7 +8,6 @@ import '../../core/permissions/app_permission.dart';
 import '../../core/permissions/rbac_service.dart';
 import '../../core/permissions/permission_guard.dart';
 import '../../services/auth_service.dart';
-import '../../services/audit_service.dart';
 
 /// Écran d'administration de la Matrice RBAC Granulaire & Gestion des Rôles
 /// Accessible uniquement aux utilisateurs détenant la permission [rbac.manage_permissions]
@@ -89,10 +88,14 @@ class _RbacManagementScreenState extends State<RbacManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bodyContent = Column(
+    final bodyContent = ListView(
+      padding: const EdgeInsets.only(bottom: 24),
       children: [
         // Barre de simulation de rôle (strictement restreinte au mode DEBUG)
         if (kDebugMode) _buildDebugRoleSwitcher(),
+
+        // Bannière d'action souveraine : Création d'un nouveau compte
+        _buildCreateAccountBanner(),
 
         // Sélecteur de rôle cible à configurer
         _buildRoleSelector(),
@@ -100,9 +103,14 @@ class _RbacManagementScreenState extends State<RbacManagementScreen> {
         // Filtres par module
         _buildModuleFilterChips(),
 
+        const SizedBox(height: 8),
+
         // Matrice des permissions
-        Expanded(
-          child: _buildPermissionsList(),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            children: _buildPermissionCards(),
+          ),
         ),
       ],
     );
@@ -111,7 +119,7 @@ class _RbacManagementScreenState extends State<RbacManagementScreen> {
       return PermissionGuard(
         permissionId: AppPermission.rbacManagePermissions,
         actionLabel: 'Gouvernance RBAC & Permissions',
-        child: Container(
+        child: Material(
           color: DioufyColors.backgroundLight,
           child: bodyContent,
         ),
@@ -183,6 +191,91 @@ class _RbacManagementScreenState extends State<RbacManagementScreen> {
           ],
         ),
         body: bodyContent,
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: () => showCreateUserDialog(context),
+          backgroundColor: const Color(0xFF059669),
+          foregroundColor: Colors.white,
+          elevation: 6,
+          icon: const Icon(Icons.person_add_alt_1),
+          label: const Text(
+            'Créer Compte',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCreateAccountBanner() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF059669).withValues(alpha: 0.45), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF059669).withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF059669),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.person_add_alt_1, color: Colors.white, size: 22),
+              ),
+              const SizedBox(width: 14),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Nouveau compte utilisateur",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      "Provisionner chauffeur, coxeur, GIE, garagiste...",
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ElevatedButton.icon(
+            onPressed: () => showCreateUserDialog(context),
+            icon: const Icon(Icons.person_add_alt_1, size: 18, color: Colors.white),
+            label: const Text(
+              "+ Créer un Compte",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Colors.white),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF059669),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -190,45 +283,41 @@ class _RbacManagementScreenState extends State<RbacManagementScreen> {
   Widget _buildDebugRoleSwitcher() {
     return Container(
       color: Colors.amber.withOpacity(0.12),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        children: [
-          const Icon(Icons.bug_report, size: 18, color: Colors.orange),
-          const SizedBox(width: 8),
-          const Text(
-            'Simulateur Profil (DEBUG) :',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.brown),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: AppRole.values.map((role) {
-                  final isCurrent = RbacService.instance.currentRole == role;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: ChoiceChip(
-                      label: Text(role.id, style: const TextStyle(fontSize: 11)),
-                      selected: isCurrent,
-                      selectedColor: DioufyColors.primary,
-                      labelStyle: TextStyle(
-                        color: isCurrent ? Colors.white : Colors.black87,
-                        fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                      ),
-                      onSelected: (selected) {
-                        if (selected) {
-                          RbacService.instance.switchRoleForTesting(role);
-                          setState(() {});
-                        }
-                      },
-                    ),
-                  );
-                }).toList(),
-              ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            const Icon(Icons.bug_report, size: 16, color: Colors.orange),
+            const SizedBox(width: 6),
+            const Text(
+              'Simulateur (DEBUG) :',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.brown),
             ),
-          ),
-        ],
+            const SizedBox(width: 8),
+            ...AppRole.values.map((role) {
+              final isCurrent = RbacService.instance.currentRole == role;
+              return Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: ChoiceChip(
+                  label: Text(role.id, style: const TextStyle(fontSize: 11)),
+                  selected: isCurrent,
+                  selectedColor: DioufyColors.primary,
+                  labelStyle: TextStyle(
+                    color: isCurrent ? Colors.white : Colors.black87,
+                    fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                  ),
+                  onSelected: (selected) {
+                    if (selected) {
+                      RbacService.instance.switchRoleForTesting(role);
+                      setState(() {});
+                    }
+                  },
+                ),
+              );
+            }),
+          ],
+        ),
       ),
     );
   }
@@ -319,7 +408,7 @@ class _RbacManagementScreenState extends State<RbacManagementScreen> {
     );
   }
 
-  Widget _buildPermissionsList() {
+  List<Widget> _buildPermissionCards() {
     final filtered = AppPermission.allPermissions.where((p) {
       if (_selectedModuleFilter == 'all') return true;
       return p.moduleId == _selectedModuleFilter;
@@ -327,94 +416,89 @@ class _RbacManagementScreenState extends State<RbacManagementScreen> {
 
     final activePermissions = _rolePermissionsMap[_selectedRole]!;
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: filtered.length,
-      itemBuilder: (context, index) {
-        final perm = filtered[index];
-        final isGranted = activePermissions.contains(perm.id);
-        final isLocked = perm.category == PermissionCategory.systemLocked &&
-            _selectedRole == AppRole.superAdmin;
+    return filtered.map((perm) {
+      final isGranted = activePermissions.contains(perm.id);
+      final isLocked = perm.category == PermissionCategory.systemLocked &&
+          _selectedRole == AppRole.superAdmin;
 
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          elevation: 1,
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Row(
-              children: [
-                _buildCategoryBadge(perm.category),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              perm.name,
-                              style: const TextStyle(
+      return Card(
+        margin: const EdgeInsets.only(bottom: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 1,
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Row(
+            children: [
+              _buildCategoryBadge(perm.category),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            perm.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: DioufyColors.primaryDark,
+                            ),
+                          ),
+                        ),
+                        if (perm.isDangerous)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'Sensible',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.red,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                                color: DioufyColors.primaryDark,
                               ),
                             ),
                           ),
-                          if (perm.isDangerous)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.red.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Text(
-                                'Sensible',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.red,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      perm.description,
+                      style: const TextStyle(fontSize: 12, color: Colors.black54),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'ID: ${perm.id} • Module: ${perm.moduleId}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontFamily: 'monospace',
+                        color: Colors.blueGrey,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        perm.description,
-                        style: const TextStyle(fontSize: 12, color: Colors.black54),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'ID: ${perm.id} • Module: ${perm.moduleId}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontFamily: 'monospace',
-                          color: Colors.blueGrey,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                if (isLocked)
-                  const Tooltip(
-                    message: 'Permission vitale du Super Admin (Inaliénable)',
-                    child: Icon(Icons.lock, color: DioufyColors.coral, size: 24),
-                  )
-                else
-                  Switch.adaptive(
-                    value: isGranted,
-                    activeColor: DioufyColors.emerald,
-                    onChanged: (val) => _togglePermission(perm.id, perm),
-                  ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              if (isLocked)
+                const Tooltip(
+                  message: 'Permission vitale du Super Admin (Inaliénable)',
+                  child: Icon(Icons.lock, color: DioufyColors.coral, size: 24),
+                )
+              else
+                Switch.adaptive(
+                  value: isGranted,
+                  activeColor: DioufyColors.emerald,
+                  onChanged: (val) => _togglePermission(perm.id, perm),
+                ),
+            ],
           ),
-        );
-      },
-    );
+        ),
+      );
+    }).toList();
   }
 
   Widget _buildCategoryBadge(PermissionCategory category) {
@@ -444,14 +528,17 @@ class _RbacManagementScreenState extends State<RbacManagementScreen> {
         break;
     }
 
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(10),
+    return Tooltip(
+      message: label,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, color: fg, size: 22),
       ),
-      child: Icon(icon, color: fg, size: 22),
     );
   }
 

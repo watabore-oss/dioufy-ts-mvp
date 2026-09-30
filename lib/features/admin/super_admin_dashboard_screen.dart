@@ -90,57 +90,42 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
               tooltip: 'Retour',
               onPressed: () => _handleBackNavigation(context),
             ),
-            title: const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.shield, color: Color(0xFFD97706), size: 18),
-                    SizedBox(width: 8),
-                    Text(
-                      "Super Administration",
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17.5, color: Color(0xFF0F172A)),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 2),
-                Text(
-                  "Console de Gouvernance Dioufy-TS",
-                  style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
-                ),
-              ],
+            title: const Text(
+              "Super Administration",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16.5, color: Color(0xFF0F172A)),
+              overflow: TextOverflow.ellipsis,
             ),
             actions: [
               // BOUTON VERT D'ACTION RAPIDE : + CRÉER COMPTE
-              ElevatedButton.icon(
-                onPressed: () => RbacManagementScreen.showCreateUserDialog(context),
-                icon: const Icon(Icons.person_add_alt_1, size: 18, color: Colors.white),
-                label: const Text(
-                  '+ Créer Compte',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: Colors.white,
-                    letterSpacing: 0.3,
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: ElevatedButton.icon(
+                  onPressed: () => RbacManagementScreen.showCreateUserDialog(context),
+                  icon: const Icon(Icons.person_add_alt_1, size: 16, color: Colors.white),
+                  label: const Text(
+                    '+ Créer Compte',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12.5,
+                      color: Colors.white,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF059669),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                 ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF059669),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
               IconButton(
-                icon: const Icon(Icons.storefront_outlined, color: Color(0xFF1D4ED8), size: 24),
+                icon: const Icon(Icons.storefront_outlined, color: Color(0xFF1D4ED8), size: 22),
                 tooltip: "Espace Voyageur Public",
                 onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
             ],
             bottom: TabBar(
               controller: _tabController,
@@ -172,6 +157,17 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
               _buildAuditLogTab(),
             ],
           ),
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: () => RbacManagementScreen.showCreateUserDialog(context),
+            backgroundColor: const Color(0xFF059669),
+            foregroundColor: Colors.white,
+            elevation: 4,
+            icon: const Icon(Icons.person_add_alt_1),
+            label: const Text(
+              'Créer Compte',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+          ),
         ),
       ),
     );
@@ -184,41 +180,50 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
     return FutureBuilder<PlatformKpiReport>(
       future: _kpiFuture,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(color: DioufyColors.primaryDark),
-                SizedBox(height: 16),
-                Text("Agrégation des métriques d'exploitation...", style: TextStyle(color: Colors.black54)),
-              ],
-            ),
-          );
-        }
-
+        final isLoading = snapshot.connectionState == ConnectionState.waiting;
         final report = snapshot.data;
-        if (report == null) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
-                const SizedBox(height: 12),
-                const Text("Données KPI non disponibles"),
-                const SizedBox(height: 12),
-                ElevatedButton(
-                  onPressed: _refreshKpis,
-                  child: const Text("Réessayer"),
-                ),
-              ],
-            ),
-          );
-        }
 
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // Bandeau d'action rapide souverain : Création de compte utilisateur (TOUJOURS visible)
+            _buildKpiCreateAccountBanner(),
+
+            if (isLoading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(color: DioufyColors.primaryDark),
+                      SizedBox(height: 16),
+                      Text("Agrégation des métriques d'exploitation...", style: TextStyle(color: Colors.black54)),
+                    ],
+                  ),
+                ),
+              )
+            else if (report == null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 40),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
+                      const SizedBox(height: 12),
+                      const Text("Données KPI non disponibles"),
+                      const SizedBox(height: 12),
+                      ElevatedButton(
+                        onPressed: _refreshKpis,
+                        child: const Text("Réessayer"),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else ...[
+
             // Bandeau de synchronisation
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -397,8 +402,83 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
               ),
             ),
           ],
-        );
-      },
+        ],
+      );
+    },
+  );
+}
+
+  Widget _buildKpiCreateAccountBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF059669).withValues(alpha: 0.45), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF059669).withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF059669),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.person_add_alt_1, color: Colors.white, size: 22),
+              ),
+              const SizedBox(width: 14),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Nouveau compte utilisateur",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      "Provisionner chauffeur, coxeur, GIE, garagiste...",
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ElevatedButton.icon(
+            onPressed: () => RbacManagementScreen.showCreateUserDialog(context),
+            icon: const Icon(Icons.person_add_alt_1, size: 18, color: Colors.white),
+            label: const Text(
+              "+ Créer un Compte",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Colors.white),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF059669),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -425,17 +505,22 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                title,
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: iconColor, letterSpacing: 0.5),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: iconColor, letterSpacing: 0.5),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              Icon(icon, size: 24, color: iconColor),
+              const SizedBox(width: 6),
+              Icon(icon, size: 22, color: iconColor),
             ],
           ),
           const SizedBox(height: 8),
           if (customValue != null) customValue else Text(
             value ?? "0",
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: iconColor),
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: iconColor),
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 4),
           Text(formulaSubtitle, style: const TextStyle(fontSize: 12, color: Colors.black54)),

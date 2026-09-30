@@ -5,6 +5,7 @@
 -- Dernières migrations actives :
 --   - 20260928_auth_rbac_robust_refactor.sql
 --   - 20260929_fix_managed_user_auth_and_hardening.sql
+--   - 20260930_fix_password_reset_and_rls_recursion.sql
 -- ==============================================================================
 -- Supabase / Postgres schema for Dioufy-TS MVP (Ancienne Version)
 -- IDEMPOTENCE STRATEGY:
@@ -33,10 +34,14 @@ CREATE TABLE IF NOT EXISTS app_users (
   phone text,
   email text,
   full_name text,
-  role text DEFAULT 'traveller', -- traveller | driver | agency_staff | admin
+  role text DEFAULT 'passenger', -- passenger | driver | agency_staff | super_admin
   agency_id uuid REFERENCES agencies(id) ON DELETE SET NULL,
+  organization_id uuid,
+  avatar_url text,
+  is_active boolean DEFAULT true,
   fcm_token text,
-  created_at timestamptz DEFAULT now()
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
 );
 
 -- Trips

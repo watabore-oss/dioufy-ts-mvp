@@ -81,9 +81,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           ),
         );
       } else {
+        final err = AuthService.instance.lastAuthError ?? 'Impossible d\'envoyer l\'email de réinitialisation. Vérifiez l\'adresse.';
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Impossible d\'envoyer l\'email de réinitialisation. Vérifiez l\'adresse.'),
+          SnackBar(
+            content: Text(err),
             backgroundColor: DioufyColors.coral,
           ),
         );

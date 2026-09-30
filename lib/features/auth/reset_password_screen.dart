@@ -34,26 +34,30 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final client = Supabase.instance.client;
       final newPass = _passwordController.text.trim();
-
-      await client.auth.updateUser(UserAttributes(password: newPass));
+      final ok = await AuthService.instance.completePasswordRecovery(newPassword: newPass);
 
       setState(() => _isLoading = false);
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Mot de passe mis à jour avec succès ! Veuillez vous connecter.'),
-          backgroundColor: DioufyColors.emerald,
-          duration: Duration(seconds: 4),
-        ),
-      );
-
-      // Déconnexion et redirection vers l'écran de connexion
-      await AuthService.instance.logout();
-      if (!mounted) return;
-      Navigator.of(context).pushNamedAndRemoveUntil(AppRouter.login, (route) => false);
+      if (ok) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Mot de passe mis à jour avec succès ! Veuillez vous connecter avec votre nouveau mot de passe.'),
+            backgroundColor: DioufyColors.emerald,
+            duration: Duration(seconds: 4),
+          ),
+        );
+        Navigator.of(context).pushNamedAndRemoveUntil(AppRouter.login, (route) => false);
+      } else {
+        final err = AuthService.instance.lastAuthError ?? 'Erreur lors de la mise à jour du mot de passe.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(err),
+            backgroundColor: DioufyColors.coral,
+          ),
+        );
+      }
     } catch (e) {
       setState(() => _isLoading = false);
       if (!mounted) return;
@@ -67,8 +71,19 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     }
   }
 
+  void _handleBack() {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      AuthService.instance.cancelPasswordRecovery();
+      Navigator.of(context).pushNamedAndRemoveUntil(AppRouter.login, (route) => false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final recoveryError = AuthService.instance.passwordRecoveryError;
+
     return Scaffold(
       backgroundColor: DioufyColors.backgroundLight,
       appBar: AppBar(
@@ -77,7 +92,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: DioufyColors.textPrimary),
           tooltip: 'Retour',
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: _handleBack,
         ),
         title: const Text(
           'Nouveau mot de passe',
@@ -100,44 +115,111 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
               color: Colors.white,
               child: Padding(
                 padding: const EdgeInsets.all(32),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // En-tête
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: DioufyColors.primary.withValues(alpha: 0.1),
-                            shape: BoxShape.circle,
+                child: recoveryError != null
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Center(
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: DioufyColors.coral.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.warning_amber_rounded,
+                                color: DioufyColors.coral,
+                                size: 44,
+                              ),
+                            ),
                           ),
-                          child: const Icon(
-                            Icons.lock_reset,
-                            color: DioufyColors.primary,
-                            size: 40,
+                          const SizedBox(height: 20),
+                          const Text(
+                            'Lien de réinitialisation invalide',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 19,
+                              fontWeight: FontWeight.bold,
+                              color: DioufyColors.textPrimary,
+                            ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      const Text(
-                        'Définir un nouveau mot de passe',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: DioufyColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Votre lien de sécurité a été validé. Saisissez votre nouveau mot de passe pour sécuriser votre compte.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 14, color: Color(0xFF64748B)),
-                      ),
-                      const SizedBox(height: 28),
+                          const SizedBox(height: 10),
+                          Text(
+                            recoveryError,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 14, color: Color(0xFF64748B), height: 1.4),
+                          ),
+                          const SizedBox(height: 28),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: DioufyColors.primary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            icon: const Icon(Icons.refresh, size: 20),
+                            label: const Text(
+                              'DEMANDER UN NOUVEAU LIEN',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5),
+                            ),
+                            onPressed: () {
+                              AuthService.instance.cancelPasswordRecovery();
+                              Navigator.of(context).pushNamedAndRemoveUntil(
+                                AppRouter.login,
+                                (route) => false,
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 13),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onPressed: _handleBack,
+                            child: const Text('Retour à la connexion'),
+                          ),
+                        ],
+                      )
+                    : Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // En-tête
+                            Center(
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: DioufyColors.primary.withValues(alpha: 0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.lock_reset,
+                                  color: DioufyColors.primary,
+                                  size: 40,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            const Text(
+                              'Définir un nouveau mot de passe',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: DioufyColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Votre lien de sécurité a été validé. Saisissez votre nouveau mot de passe pour sécuriser votre compte.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 14, color: Color(0xFF64748B)),
+                            ),
+                            const SizedBox(height: 28),
 
                       // Champ Nouveau Mot de passe
                       TextFormField(

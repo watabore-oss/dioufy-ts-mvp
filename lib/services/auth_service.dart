@@ -88,6 +88,8 @@ class AuthService extends ChangeNotifier {
 
   AppUser _currentUser = AppUser.guest();
   String? _lastAuthError;
+  bool _isPasswordRecovery = false;
+  String? _passwordRecoveryError;
 
   AuthService._();
 
@@ -103,6 +105,8 @@ class AuthService extends ChangeNotifier {
   bool get isSuperAdmin => _currentUser.role == AppRole.superAdmin;
   String? get currentOrganizationId => _currentUser.organizationId;
   String? get lastAuthError => _lastAuthError;
+  bool get isPasswordRecovery => _isPasswordRecovery;
+  String? get passwordRecoveryError => _passwordRecoveryError;
 
   /// Initialisation de la session au démarrage.
   /// PRINCIPE ABSOLU : Supabase Auth est l'unique source de vérité.
@@ -112,7 +116,29 @@ class AuthService extends ChangeNotifier {
       final client = Supabase.instance.client;
       final currentSession = client.auth.currentSession;
 
-      if (currentSession != null && !currentSession.isExpired) {
+      // Détection universelle de mode récupération de mot de passe (Web & Deep Link)
+      if (kIsWeb) {
+        final uri = Uri.base;
+        final frag = uri.fragment;
+        final query = uri.queryParameters;
+
+        // Détection de lien expiré ou d'erreur d'autorisation Supabase
+        if (frag.contains('error=') || query.containsKey('error')) {
+          final isExpired = frag.contains('otp_expired') || query['error_code'] == 'otp_expired';
+          _passwordRecoveryError = isExpired
+              ? 'Le lien de réinitialisation est expiré ou a déjà été utilisé. Veuillez redemander un nouveau lien.'
+              : 'Lien de réinitialisation invalide ou non autorisé.';
+          _isPasswordRecovery = true;
+        } else if (frag.contains('type=recovery') ||
+            frag.contains('/reset-password') ||
+            query['type'] == 'recovery') {
+          _isPasswordRecovery = true;
+        }
+      }
+
+      if (_isPasswordRecovery) {
+        debugPrint('[AuthService] Mode récupération de mot de passe actif au démarrage.');
+      } else if (currentSession != null && !currentSession.isExpired) {
         // Session Supabase active : charger le profil vérifié depuis le serveur
         await _loadServerProfileAndPermissions(currentSession.user);
       } else {
@@ -125,12 +151,27 @@ class AuthService extends ChangeNotifier {
         final session = data.session;
         final event = data.event;
 
+        if (event == AuthChangeEvent.passwordRecovery) {
+          debugPrint('[AuthService] Événement AuthChangeEvent.passwordRecovery intercepté.');
+          _isPasswordRecovery = true;
+          _passwordRecoveryError = null;
+          notifyListeners();
+          return;
+        }
+
         if (session != null &&
             (event == AuthChangeEvent.signedIn ||
                 event == AuthChangeEvent.tokenRefreshed ||
                 event == AuthChangeEvent.userUpdated)) {
+          if (_isPasswordRecovery) {
+            debugPrint('[AuthService] Session active en mode récupération : maintien sur l\'écran Nouveau mot de passe.');
+            notifyListeners();
+            return;
+          }
           await _loadServerProfileAndPermissions(session.user);
         } else if (event == AuthChangeEvent.signedOut) {
+          _isPasswordRecovery = false;
+          _passwordRecoveryError = null;
           await _handleSignOutCleanup();
         }
       });
@@ -183,8 +224,27 @@ class AuthService extends ChangeNotifier {
         }
       } else {
         // Fallback requêtes directes sécurisées
+        // 1. Lire app_users en priorité pour garantir la préservation du rôle exact (ex: super_admin)
         try {
-          // Résolution de l'appartenance de plus haut niveau
+          final userRow = await client
+              .from('app_users')
+              .select('role, full_name, phone, organization_id, avatar_url')
+              .eq('id', sbUser.id)
+              .maybeSingle();
+
+          if (userRow != null) {
+            roleId = userRow['role']?.toString() ?? 'passenger';
+            organizationId = userRow['organization_id']?.toString();
+            fullName = userRow['full_name']?.toString() ?? fullName;
+            phone = userRow['phone']?.toString() ?? phone;
+            avatarUrl = userRow['avatar_url']?.toString();
+          }
+        } catch (dbErr) {
+          debugPrint('[AuthService] Fallback DB app_users : $dbErr');
+        }
+
+        // 2. Vérifier organization_memberships (isolé pour ne jamais bloquer en cas de récursion RLS)
+        try {
           final memberships = await client
               .from('organization_memberships')
               .select('role_id, organization_id')
@@ -192,27 +252,11 @@ class AuthService extends ChangeNotifier {
               .eq('is_active', true);
 
           if (memberships.isNotEmpty) {
-            // Prendre le rôle ayant le niveau le plus élevé
-            roleId = memberships.first['role_id']?.toString() ?? 'passenger';
-            organizationId = memberships.first['organization_id']?.toString();
-          } else {
-            // Vérifier app_users
-            final userRow = await client
-                .from('app_users')
-                .select('role, full_name, phone, organization_id, avatar_url')
-                .eq('id', sbUser.id)
-                .maybeSingle();
-
-            if (userRow != null) {
-              roleId = userRow['role']?.toString() ?? 'passenger';
-              organizationId = userRow['organization_id']?.toString();
-              fullName = userRow['full_name']?.toString() ?? fullName;
-              phone = userRow['phone']?.toString() ?? phone;
-              avatarUrl = userRow['avatar_url']?.toString();
-            }
+            roleId = memberships.first['role_id']?.toString() ?? roleId;
+            organizationId = memberships.first['organization_id']?.toString() ?? organizationId;
           }
-        } catch (dbErr) {
-          debugPrint('[AuthService] Fallback DB profiles error: $dbErr');
+        } catch (memErr) {
+          debugPrint('[AuthService] Fallback DB organization_memberships non bloquant : $memErr');
         }
       }
 
@@ -556,6 +600,7 @@ class AuthService extends ChangeNotifier {
 
   /// 7. Réinitialisation de Mot de Passe par Email
   Future<bool> resetPasswordForEmail({required String email}) async {
+    _lastAuthError = null;
     try {
       final client = Supabase.instance.client;
       final redirectUrl = kIsWeb
@@ -567,8 +612,13 @@ class AuthService extends ChangeNotifier {
         redirectTo: redirectUrl,
       );
       return true;
+    } on AuthException catch (authErr) {
+      debugPrint('[AuthService] Reset password email AuthException: ${authErr.message}');
+      _lastAuthError = authErr.message;
+      return false;
     } catch (e) {
-      debugPrint('Reset password email : $e');
+      debugPrint('[AuthService] Reset password email : $e');
+      _lastAuthError = 'Impossible d\'envoyer l\'email de réinitialisation. Vérifiez votre adresse ou connexion.';
       return false;
     }
   }
@@ -627,6 +677,43 @@ class AuthService extends ChangeNotifier {
       return true;
     } catch (e) {
       debugPrint('Mise à jour mot de passe : $e');
+      return false;
+    }
+  }
+
+  /// 8b. Gestion explicite du cycle de vie de la récupération de mot de passe
+  void setPasswordRecovery(bool value, {String? error}) {
+    _isPasswordRecovery = value;
+    _passwordRecoveryError = error;
+    notifyListeners();
+  }
+
+  /// Annule la récupération et déconnecte la session temporaire
+  Future<void> cancelPasswordRecovery() async {
+    _isPasswordRecovery = false;
+    _passwordRecoveryError = null;
+    await logout();
+    notifyListeners();
+  }
+
+  /// Finalise la réinitialisation de mot de passe suite au clic sur le lien sécurisé
+  Future<bool> completePasswordRecovery({required String newPassword}) async {
+    final trimmedPass = newPassword.trim();
+    if (trimmedPass.length < 6) {
+      _lastAuthError = 'Le mot de passe doit comporter au moins 6 caractères.';
+      return false;
+    }
+    try {
+      final client = Supabase.instance.client;
+      await client.auth.updateUser(UserAttributes(password: trimmedPass));
+      _isPasswordRecovery = false;
+      _passwordRecoveryError = null;
+      await logout();
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('[AuthService] Erreur finalisation recovery : $e');
+      _lastAuthError = 'Erreur lors de la mise à jour du mot de passe : $e';
       return false;
     }
   }

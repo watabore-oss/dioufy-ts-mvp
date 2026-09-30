@@ -101,5 +101,27 @@ void main() {
         isFalse,
       );
     });
+
+    test('Password recovery state management works reliably', () async {
+      expect(AuthService.instance.isPasswordRecovery, isFalse);
+      expect(AuthService.instance.passwordRecoveryError, isNull);
+
+      AuthService.instance.setPasswordRecovery(true, error: 'Lien expiré');
+      expect(AuthService.instance.isPasswordRecovery, isTrue);
+      expect(AuthService.instance.passwordRecoveryError, 'Lien expiré');
+
+      await AuthService.instance.cancelPasswordRecovery();
+      expect(AuthService.instance.isPasswordRecovery, isFalse);
+      expect(AuthService.instance.passwordRecoveryError, isNull);
+    });
+
+    test('Complete password recovery validates minimum length', () async {
+      AuthService.instance.setPasswordRecovery(true);
+      final shortResult = await AuthService.instance.completePasswordRecovery(newPassword: '123');
+      expect(shortResult, isFalse);
+      expect(AuthService.instance.lastAuthError, contains('6 caractères'));
+      expect(AuthService.instance.isPasswordRecovery, isTrue);
+      await AuthService.instance.cancelPasswordRecovery();
+    });
   });
 }
