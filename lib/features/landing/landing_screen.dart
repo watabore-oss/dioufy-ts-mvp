@@ -452,54 +452,54 @@ class _LandingScreenState extends State<LandingScreen> {
           // CONTENU SCROLLABLE MOBILE : Tous les autres éléments sont centrés
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   // SLOGAN : Agrandir la typographie et passer en style semi-bold italique
                   _buildSloganSection(isMobile: true),
 
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 10),
 
                   // BIENVENUE CENTRÉE
                   _buildWelcomeSection(isMobile: true),
 
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 16),
 
                   // BOUTONS AUTHENTIFICATION AVEC LIBELLÉS CENTRÉS
                   _buildAuthButtonsRow(isMobile: true),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 14),
 
                   // SÉPARATEUR "OU" CENTRÉ
                   _buildOrDivider(),
 
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 12),
 
                   // TITRE ACHAT SANS COMPTE CENTRÉ
                   _buildGuestBookingHeader(),
 
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
 
                   // CARTE FORMULAIRE DE RECHERCHE MOBILE
                   _buildSearchBookingCard(isMobile: true),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
 
                   // CARTE PROMOTIONNELLE MOBILE
                   MobilePromoCard(onTap: _showPopularDestinationsModal),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 18),
 
                   // PILIERS DE RÉASSURANCE CENTRÉS
                   _buildTrustBadgesRow(isMobile: true),
 
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 22),
 
                   // FOOTER ET MENTIONS LÉGALES CENTRÉS
                   _buildLegalFooter(),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
                 ],
               ),
             ),
@@ -650,19 +650,19 @@ class _LandingScreenState extends State<LandingScreen> {
       width: double.infinity,
       alignment: Alignment.center,
       padding: EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: isMobile ? 10 : 14,
+        horizontal: isMobile ? 8 : 16,
+        vertical: isMobile ? 8 : 14,
       ),
       child: Text(
         '« ${AppConstants.appSlogan} »', // "Fo nek sa gare fek lafa"
         textAlign: TextAlign.center,
         style: TextStyle(
           fontFamily: 'Inter',
-          fontSize: isMobile ? 18.0 : 20.0, // Typographie agrandie
+          fontSize: isMobile ? 16.0 : 20.0,
           fontWeight: FontWeight.w600, // Semi-bold
           fontStyle: FontStyle.italic, // Italique
           color: const Color(0xFF1D4ED8), // Bleu Royal Dioufy
-          letterSpacing: 0.3,
+          letterSpacing: 0.2,
           height: 1.35,
         ),
       ),
@@ -850,7 +850,7 @@ class _LandingScreenState extends State<LandingScreen> {
 
   Widget _buildSearchBookingCard({bool isMobile = false}) {
     return Container(
-      padding: EdgeInsets.all(isMobile ? 18 : 22),
+      padding: EdgeInsets.all(isMobile ? 16 : 22),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
@@ -867,57 +867,99 @@ class _LandingScreenState extends State<LandingScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // RANGÉE 1 : DÉPART / SWAP / DESTINATION
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Départ
-              Expanded(
-                child: _buildSelectorBox(
-                  icon: Icons.location_on_rounded,
-                  iconColor: const Color(0xFF1D4ED8),
-                  label: 'Départ',
-                  value: _departureCity,
-                  onTap: () => _selectCity(isDeparture: true),
-                ),
-              ),
+          // Mobile : layout vertical (pleine largeur) pour éviter troncature
+          // Desktop : layout horizontal avec swap au centre
+          if (isMobile) ...[
+            // Départ — pleine largeur
+            _buildSelectorBox(
+              icon: Icons.location_on_rounded,
+              iconColor: const Color(0xFF1D4ED8),
+              label: 'Départ',
+              value: _departureCity,
+              onTap: () => _selectCity(isDeparture: true),
+            ),
 
-              // Bouton Inverser villes ⇄
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+            // Bouton Inverser villes ⇄ centré entre les deux champs
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
                 child: InkWell(
                   onTap: _swapCities,
                   borderRadius: BorderRadius.circular(22),
                   child: Container(
-                    width: 44,
-                    height: 44,
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(
                       color: const Color(0xFFF8FAFC),
                       shape: BoxShape.circle,
                       border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
                     ),
                     child: const Icon(
-                      Icons.swap_horiz_rounded,
-                      color: Color(0xFF1E293B),
+                      Icons.swap_vert_rounded,
+                      color: Color(0xFF1D4ED8),
                       size: 22,
                     ),
                   ),
                 ),
               ),
+            ),
 
-              // Destination
-              Expanded(
-                child: _buildSelectorBox(
-                  icon: Icons.location_on_rounded,
-                  iconColor: const Color(0xFF059669),
-                  label: 'Destination',
-                  value: _destinationCity,
-                  onTap: () => _selectCity(isDeparture: false),
+            // Destination — pleine largeur
+            _buildSelectorBox(
+              icon: Icons.location_on_rounded,
+              iconColor: const Color(0xFF059669),
+              label: 'Destination',
+              value: _destinationCity,
+              onTap: () => _selectCity(isDeparture: false),
+            ),
+          ] else ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: _buildSelectorBox(
+                    icon: Icons.location_on_rounded,
+                    iconColor: const Color(0xFF1D4ED8),
+                    label: 'Départ',
+                    value: _departureCity,
+                    onTap: () => _selectCity(isDeparture: true),
+                  ),
                 ),
-              ),
-            ],
-          ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: InkWell(
+                    onTap: _swapCities,
+                    borderRadius: BorderRadius.circular(22),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
+                      ),
+                      child: const Icon(
+                        Icons.swap_horiz_rounded,
+                        color: Color(0xFF1E293B),
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: _buildSelectorBox(
+                    icon: Icons.location_on_rounded,
+                    iconColor: const Color(0xFF059669),
+                    label: 'Destination',
+                    value: _destinationCity,
+                    onTap: () => _selectCity(isDeparture: false),
+                  ),
+                ),
+              ],
+            ),
+          ],
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
           // RANGÉE 2 : DATE DE DÉPART / PASSAGERS
           Row(
@@ -927,13 +969,13 @@ class _LandingScreenState extends State<LandingScreen> {
                 child: _buildSelectorBox(
                   icon: Icons.calendar_today_rounded,
                   iconColor: const Color(0xFF475569),
-                  label: 'Date de départ',
+                  label: 'Date',
                   value: _formatDisplayDate(_departureDate),
                   onTap: _pickDate,
                 ),
               ),
 
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
 
               // Passagers
               Expanded(
@@ -948,11 +990,11 @@ class _LandingScreenState extends State<LandingScreen> {
             ],
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
 
           // BOUTON RECHERCHER UN TRAJET (Centré et imposant)
           SizedBox(
-            height: 56,
+            height: 54,
             child: ElevatedButton(
               onPressed: _handleSearch,
               style: ElevatedButton.styleFrom(
@@ -998,7 +1040,7 @@ class _LandingScreenState extends State<LandingScreen> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
         decoration: BoxDecoration(
           color: const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(14),
@@ -1006,8 +1048,8 @@ class _LandingScreenState extends State<LandingScreen> {
         ),
         child: Row(
           children: [
-            Icon(icon, color: iconColor, size: 22),
-            const SizedBox(width: 10),
+            Icon(icon, color: iconColor, size: 20),
+            const SizedBox(width: 8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1015,20 +1057,22 @@ class _LandingScreenState extends State<LandingScreen> {
                 children: [
                   Text(
                     label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 13.5, // Lisibilité rehaussée
+                      fontSize: 12.5,
                       color: Color(0xFF475569),
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 2),
                   Text(
                     value,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 16.0, // Lisibilité rehaussée
-                      fontWeight: FontWeight.w900,
+                      fontSize: 15.0,
+                      fontWeight: FontWeight.w800,
                       color: Color(0xFF0F172A),
                     ),
                   ),
@@ -1037,7 +1081,7 @@ class _LandingScreenState extends State<LandingScreen> {
             ),
             const Icon(
               Icons.keyboard_arrow_down_rounded,
-              size: 20,
+              size: 18,
               color: Color(0xFF64748B),
             ),
           ],
