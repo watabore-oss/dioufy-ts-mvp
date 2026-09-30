@@ -1,135 +1,16 @@
 -- ==============================================================================
--- DIOUFY-TS • MIGRATION DE PRODUCTION : PROVISIONNEMENT AUTH & DURCISSEMENT RBAC
--- Date : 29 Septembre 2026
--- Version : 2.1.0
--- 
--- Objectifs :
--- 1. Provisionnement effectif des comptes dans auth.users et auth.identities
--- 2. Résolution de l'impossibilité de connexion des utilisateurs managés
--- 3. Sécurisation stricte des RPC contre l'exposition anon / PUBLIC
--- 4. Fonctions anti-doublon et recherche d'identifiant sécurisées par RPC
+-- Migration : Correction chirurgicale de la fonction RPC create_managed_user
+-- Élimination de l'erreur PostgreSQL : "cannot insert a non-DEFAULT value into column confirmed_at"
+-- ==============================================================================
+--
+-- Explication technique :
+-- Dans Supabase auth.users, la colonne "confirmed_at" est une colonne générée
+-- ("GENERATED ALWAYS AS (LEAST(email_confirmed_at, phone_confirmed_at)) STORED").
+-- Tout INSERT spécifiant une valeur non-DEFAULT pour cette colonne est rejeté par PostgreSQL.
+-- En insérant email_confirmed_at et phone_confirmed_at, PostgreSQL calcule
+-- et stocke automatiquement confirmed_at sans aucune erreur.
 -- ==============================================================================
 
--- 1. Extensions cryptographiques requises
-CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA extensions;
-
--- ==============================================================================
--- 2. FONCTION DE RECHERCHE D'IDENTIFIANT SÉCURISÉE (Phone -> Email)
--- Utilisée par l'écran de login lorsque l'utilisateur saisit son numéro de téléphone.
--- Permet de respecter le RLS sur app_users tout en permettant la connexion par mot de passe.
--- ==============================================================================
-DROP FUNCTION IF EXISTS public.lookup_email_by_phone(TEXT);
-
-CREATE OR REPLACE FUNCTION public.lookup_email_by_phone(p_phone TEXT)
-RETURNS TEXT
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, auth, pg_catalog
-AS $$
-DECLARE
-    v_clean_phone TEXT;
-    v_raw_phone TEXT;
-    v_email TEXT;
-BEGIN
-    IF p_phone IS NULL OR TRIM(p_phone) = '' THEN
-        RETURN NULL;
-    END IF;
-
-    v_raw_phone := REGEXP_REPLACE(TRIM(p_phone), '[^0-9+]', '', 'g');
-    IF v_raw_phone LIKE '+%' THEN
-        v_clean_phone := v_raw_phone;
-    ELSIF v_raw_phone LIKE '221%' THEN
-        v_clean_phone := '+' || v_raw_phone;
-    ELSE
-        v_clean_phone := '+221' || v_raw_phone;
-    END IF;
-
-    -- Recherche en priorité dans app_users
-    SELECT email INTO v_email
-    FROM public.app_users
-    WHERE phone = v_clean_phone AND email IS NOT NULL AND email <> ''
-    LIMIT 1;
-
-    -- Recherche alternative dans auth.users
-    IF v_email IS NULL THEN
-        SELECT email INTO v_email
-        FROM auth.users
-        WHERE phone = v_clean_phone AND email IS NOT NULL AND email <> ''
-        LIMIT 1;
-    END IF;
-
-    RETURN v_email;
-END;
-$$;
-
-REVOKE EXECUTE ON FUNCTION public.lookup_email_by_phone(TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.lookup_email_by_phone(TEXT) TO anon, authenticated, service_role;
-
--- ==============================================================================
--- 3. FONCTION DE VÉRIFICATION PRÉVENTIVE D'UNICITÉ (Anti-Doublons)
--- ==============================================================================
-DROP FUNCTION IF EXISTS public.check_account_exists(TEXT, TEXT);
-
-CREATE OR REPLACE FUNCTION public.check_account_exists(
-    p_phone TEXT DEFAULT NULL,
-    p_email TEXT DEFAULT NULL
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, auth, pg_catalog
-AS $$
-DECLARE
-    v_clean_phone TEXT;
-    v_clean_email TEXT;
-    v_phone_exists BOOLEAN := FALSE;
-    v_email_exists BOOLEAN := FALSE;
-    v_raw_phone TEXT;
-BEGIN
-    -- Normalisation téléphone sénégalais
-    IF p_phone IS NOT NULL AND TRIM(p_phone) <> '' THEN
-        v_raw_phone := REGEXP_REPLACE(TRIM(p_phone), '[^0-9+]', '', 'g');
-        IF v_raw_phone LIKE '+%' THEN
-            v_clean_phone := v_raw_phone;
-        ELSIF v_raw_phone LIKE '221%' THEN
-            v_clean_phone := '+' || v_raw_phone;
-        ELSE
-            v_clean_phone := '+221' || v_raw_phone;
-        END IF;
-
-        SELECT EXISTS (
-            SELECT 1 FROM public.app_users WHERE phone = v_clean_phone
-            UNION
-            SELECT 1 FROM auth.users WHERE phone = v_clean_phone
-        ) INTO v_phone_exists;
-    END IF;
-
-    -- Normalisation email
-    IF p_email IS NOT NULL AND TRIM(p_email) <> '' THEN
-        v_clean_email := LOWER(TRIM(p_email));
-        SELECT EXISTS (
-            SELECT 1 FROM public.app_users WHERE LOWER(email) = v_clean_email
-            UNION
-            SELECT 1 FROM auth.users WHERE LOWER(email) = v_clean_email
-        ) INTO v_email_exists;
-    END IF;
-
-    RETURN jsonb_build_object(
-        'phone_exists', v_phone_exists,
-        'email_exists', v_email_exists
-    );
-END;
-$$;
-
-REVOKE EXECUTE ON FUNCTION public.check_account_exists(TEXT, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.check_account_exists(TEXT, TEXT) TO anon, authenticated, service_role;
-
--- ==============================================================================
--- 4. RPC DE PROVISIONNEMENT OFFICIEL : create_managed_user(...)
--- Crée l'utilisateur dans auth.users avec mot de passe crypté bcrypt,
--- ajoute l'identité dans auth.identities, et configure app_users + organization_memberships.
--- ==============================================================================
 DROP FUNCTION IF EXISTS public.create_managed_user(TEXT, TEXT, TEXT, TEXT, TEXT, UUID);
 DROP FUNCTION IF EXISTS public.create_managed_user;
 
@@ -253,7 +134,7 @@ BEGIN
     v_new_user_id := gen_random_uuid();
     v_encrypted_password := extensions.crypt(p_password, extensions.gen_salt('bf', 10));
 
-    -- I. Insertion officielle dans auth.users
+    -- I. Insertion officielle dans auth.users (sans la colonne générée confirmed_at)
     INSERT INTO auth.users (
         instance_id,
         id,
@@ -318,7 +199,7 @@ BEGIN
         updated_at
     )
     VALUES (
-        gen_random_uuid(),
+        gen_random_uuid()::text,
         v_new_user_id,
         jsonb_build_object(
             'sub', v_new_user_id::text,
@@ -407,29 +288,3 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.create_managed_user(TEXT, TEXT, TEXT, TEXT, TEXT, UUID) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.create_managed_user(TEXT, TEXT, TEXT, TEXT, TEXT, UUID) FROM anon;
 GRANT EXECUTE ON FUNCTION public.create_managed_user(TEXT, TEXT, TEXT, TEXT, TEXT, UUID) TO authenticated, service_role;
-
--- ==============================================================================
--- 5. DURCISSEMENT GLOBAL DES PERMISSIONS SUR TOUTES LES FONCTIONS SENSIBLES
--- Conformité Supabase Security Advisors (évite l'exposition non désirée aux clients anon)
--- ==============================================================================
-
--- get_my_profile_and_permissions : Réservé aux utilisateurs authentifiés
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'get_my_profile_and_permissions') THEN
-        REVOKE EXECUTE ON FUNCTION public.get_my_profile_and_permissions() FROM PUBLIC;
-        REVOKE EXECUTE ON FUNCTION public.get_my_profile_and_permissions() FROM anon;
-        GRANT EXECUTE ON FUNCTION public.get_my_profile_and_permissions() TO authenticated, service_role;
-    END IF;
-END $$;
-
--- handle_new_user : Fonction interne pour triggers, jamais appelée directement par l'API
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'handle_new_user') THEN
-        REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC;
-        REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM anon;
-        REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM authenticated;
-        GRANT EXECUTE ON FUNCTION public.handle_new_user() TO service_role, postgres;
-    END IF;
-END $$;
