@@ -716,7 +716,7 @@ class _LandingScreenState extends State<LandingScreen> {
         // BOUTON SE CONNECTER (Bleu primaire brillant avec libellé centré)
         Expanded(
           child: SizedBox(
-            height: isMobile ? 54 : 52,
+            height: isMobile ? 52 : 52,
             child: ElevatedButton(
               onPressed: () {
                 Navigator.push(
@@ -732,33 +732,40 @@ class _LandingScreenState extends State<LandingScreen> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 6),
               ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.person_outline_rounded, size: 21),
-                  SizedBox(width: 8),
-                  Text(
-                    'Se connecter',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 16.0,
-                      fontWeight: FontWeight.w800,
-                    ),
+              child: Center(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.person_outline_rounded, size: isMobile ? 19 : 21),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Se connecter',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: isMobile ? 15.0 : 16.0,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
         ),
 
-        const SizedBox(width: 12),
+        const SizedBox(width: 10),
 
         // BOUTON CRÉER UN COMPTE (Outlined pur avec libellé centré)
         Expanded(
           child: SizedBox(
-            height: isMobile ? 54 : 52,
+            height: isMobile ? 52 : 52,
             child: OutlinedButton(
               onPressed: () {
                 Navigator.push(
@@ -773,23 +780,30 @@ class _LandingScreenState extends State<LandingScreen> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 6),
               ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.person_add_alt_1_rounded, size: 21, color: Color(0xFF1D4ED8)),
-                  SizedBox(width: 8),
-                  Text(
-                    'Créer un compte',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 15.5,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF1D4ED8),
-                    ),
+              child: Center(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.person_add_alt_1_rounded, size: isMobile ? 19 : 21, color: const Color(0xFF1D4ED8)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Créer un compte',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: isMobile ? 14.5 : 15.5,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF1D4ED8),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -879,7 +893,7 @@ class _LandingScreenState extends State<LandingScreen> {
               onTap: () => _selectCity(isDeparture: true),
             ),
 
-            // Bouton Inverser villes ⇄ centré entre les deux champs
+            // Bouton Inverser villes ⇄ contrasté bleu roi Dioufy
             Center(
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
@@ -887,17 +901,23 @@ class _LandingScreenState extends State<LandingScreen> {
                   onTap: _swapCities,
                   borderRadius: BorderRadius.circular(22),
                   child: Container(
-                    width: 40,
-                    height: 40,
+                    width: 42,
+                    height: 42,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
+                      color: const Color(0xFF1D4ED8),
                       shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF1D4ED8).withValues(alpha: 0.35),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
                     ),
                     child: const Icon(
                       Icons.swap_vert_rounded,
-                      color: Color(0xFF1D4ED8),
-                      size: 22,
+                      color: Colors.white,
+                      size: 24,
                     ),
                   ),
                 ),
@@ -934,14 +954,20 @@ class _LandingScreenState extends State<LandingScreen> {
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
+                        color: const Color(0xFF1D4ED8),
                         shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF1D4ED8).withValues(alpha: 0.35),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
                       ),
                       child: const Icon(
                         Icons.swap_horiz_rounded,
-                        color: Color(0xFF1E293B),
-                        size: 22,
+                        color: Colors.white,
+                        size: 24,
                       ),
                     ),
                   ),
@@ -992,7 +1018,7 @@ class _LandingScreenState extends State<LandingScreen> {
 
           const SizedBox(height: 18),
 
-          // BOUTON RECHERCHER UN TRAJET (Centré et imposant)
+          // BOUTON RECHERCHER UN TRAJET (Centré parfaitement et imposant)
           SizedBox(
             height: 54,
             child: ElevatedButton(
@@ -1006,21 +1032,28 @@ class _LandingScreenState extends State<LandingScreen> {
                   borderRadius: BorderRadius.circular(16),
                 ),
               ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.search_rounded, size: 24),
-                  SizedBox(width: 10),
-                  Text(
-                    'Rechercher un trajet',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.3,
-                    ),
+              child: Center(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.search_rounded, size: 24),
+                      SizedBox(width: 10),
+                      Text(
+                        'Rechercher un trajet',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),

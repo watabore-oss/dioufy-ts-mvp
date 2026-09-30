@@ -314,7 +314,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       labelText: 'Mot de passe sécurisé *',
                       prefixIcon: const Icon(Icons.lock_outline_rounded, color: DioufyColors.primary, size: 22),
                       suffixIcon: IconButton(
-                        icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 22),
+                        icon: Icon(
+                          _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                          size: 22,
+                          color: const Color(0xFF1D4ED8),
+                        ),
                         onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                       ),
                     ),

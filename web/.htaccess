@@ -1,9 +1,10 @@
 # ----------------------------------------------------------------------
 # Configuration Apache / cPanel - Dioufy-TS (https://dioufy-ts.sn/)
+# Déploiement Wanekoo Hosting (public_html)
 # ----------------------------------------------------------------------
 DirectoryIndex index.html index.php
 
-# 1. Forcer la redirection HTTPS
+# 1. Forcer la redirection HTTPS systématique
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteCond %{HTTPS} off
@@ -11,6 +12,7 @@ DirectoryIndex index.html index.php
 </IfModule>
 
 # 2. Routage Single Page Application (PWA / Flutter Web)
+# Évite les erreurs 404 lors du rafraîchissement d'une sous-page
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
@@ -35,6 +37,11 @@ DirectoryIndex index.html index.php
 
 # 5. Gestion du Cache HTTP
 <IfModule mod_headers.c>
+  # Sécurité standard
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
   # Ne jamais cacher index.html et flutter_service_worker.js pour garantir les mises à jour en direct
   <FilesMatch "\.(html|json)$">
     Header set Cache-Control "max-age=0, no-cache, no-store, must-revalidate"
@@ -48,8 +55,14 @@ DirectoryIndex index.html index.php
     Header set Expires "0"
   </FilesMatch>
 
-  # Cacher les ressources statiques pendant 1 an (images, polices, wasm)
-  <FilesMatch "\.(jpg|jpeg|png|gif|ico|svg|wasm|ttf|otf|woff|woff2)$">
+  # Favicons, logos et manifest : revalidation fréquente pour les moteurs de recherche (Google, Bing)
+  <FilesMatch "(favicon|logo|dioufy|manifest).*\.(ico|png|jpeg|jpg|json|svg)$">
+    Header set Cache-Control "public, max-age=3600, must-revalidate"
+    Header unset Expires
+  </FilesMatch>
+
+  # Cacher les ressources statiques immuables (polices, wasm)
+  <FilesMatch "\.(wasm|ttf|otf|woff|woff2)$">
     Header set Cache-Control "max-age=31536000, public, immutable"
   </FilesMatch>
 </IfModule>

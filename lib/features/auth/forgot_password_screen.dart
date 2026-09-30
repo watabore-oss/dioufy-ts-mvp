@@ -481,7 +481,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   labelText: 'Nouveau mot de passe',
                   prefixIcon: const Icon(Icons.lock_outline),
                   suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                    icon: Icon(
+                      _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                      color: const Color(0xFF1D4ED8),
+                    ),
                     onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                   ),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),

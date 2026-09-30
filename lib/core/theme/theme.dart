@@ -155,6 +155,8 @@ class DioufyTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: DioufyColors.surfaceSoft,
+        prefixIconColor: DioufyColors.primary,
+        suffixIconColor: DioufyColors.textSecondary,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: DioufySpacing.md,
           vertical: DioufySpacing.md,
