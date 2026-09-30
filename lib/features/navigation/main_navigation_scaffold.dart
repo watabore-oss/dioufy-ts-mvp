@@ -154,7 +154,6 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
         );
 
       case AppRole.superAdmin:
-      case AppRole.platformAdmin:
         return const _RoleNavBundle(
           pages: [
             SuperAdminDashboardScreen(),
@@ -177,6 +176,38 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
               icon: Icon(Icons.departure_board_outlined),
               selectedIcon: Icon(Icons.departure_board),
               label: 'Régulation',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person),
+              label: 'Compte',
+            ),
+          ],
+        );
+
+      case AppRole.platformAdmin:
+        return const _RoleNavBundle(
+          pages: [
+            GieDashboardScreen(),
+            CoxeurDashboardScreen(),
+            _PassengerAssistanceTab(),
+            _UserProfileTab(),
+          ],
+          destinations: [
+            NavigationDestination(
+              icon: Icon(Icons.account_balance_outlined),
+              selectedIcon: Icon(Icons.account_balance),
+              label: 'Flotte & GIE',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.departure_board_outlined),
+              selectedIcon: Icon(Icons.departure_board),
+              label: 'Régulation',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.support_agent_outlined),
+              selectedIcon: Icon(Icons.support_agent),
+              label: 'Support',
             ),
             NavigationDestination(
               icon: Icon(Icons.person_outline),

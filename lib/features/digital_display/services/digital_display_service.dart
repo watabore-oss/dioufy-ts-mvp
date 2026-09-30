@@ -142,8 +142,9 @@ class DigitalDisplayService {
       case AppRole.mechanic:
         return _mechanicSlides;
       case AppRole.superAdmin:
-      case AppRole.platformAdmin:
         return _adminSlides;
+      case AppRole.platformAdmin:
+        return _gieSlides;
       case AppRole.passenger:
         return getSlides();
     }

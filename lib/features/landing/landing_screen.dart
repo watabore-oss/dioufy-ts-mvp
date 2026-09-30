@@ -4,6 +4,7 @@ import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
 import '../auth/register_screen.dart';
 import '../digital_display/presentation/digital_display_widget.dart';
+import '../digital_display/presentation/mobile_hero_slide_zone.dart';
 import '../digital_display/presentation/mobile_promo_card.dart';
 import '../search/search_results_screen.dart';
 
@@ -456,38 +457,25 @@ class _LandingScreenState extends State<LandingScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // SLOGAN : Agrandir la typographie et passer en style semi-bold italique
-                  _buildSloganSection(isMobile: true),
-
-                  const SizedBox(height: 10),
-
-                  // BIENVENUE CENTRÉE
-                  _buildWelcomeSection(isMobile: true),
-
-                  const SizedBox(height: 16),
-
-                  // BOUTONS AUTHENTIFICATION AVEC LIBELLÉS CENTRÉS
-                  _buildAuthButtonsRow(isMobile: true),
-
-                  const SizedBox(height: 14),
-
-                  // SÉPARATEUR "OU" CENTRÉ
-                  _buildOrDivider(),
-
-                  const SizedBox(height: 12),
-
-                  // TITRE ACHAT SANS COMPTE CENTRÉ
-                  _buildGuestBookingHeader(),
-
-                  const SizedBox(height: 12),
+                  // ZONE D'ACCUEIL AVEC SLIDES EN ARRIÈRE-PLAN (Harmonie & Taille adéquate)
+                  MobileHeroSlideZone(
+                    onLogin: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      );
+                    },
+                    onRegister: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                      );
+                    },
+                    onExploreDestinations: _showPopularDestinationsModal,
+                  ),
 
                   // CARTE FORMULAIRE DE RECHERCHE MOBILE
                   _buildSearchBookingCard(isMobile: true),
-
-                  const SizedBox(height: 16),
-
-                  // CARTE PROMOTIONNELLE MOBILE
-                  MobilePromoCard(onTap: _showPopularDestinationsModal),
 
                   const SizedBox(height: 18),
 

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dioufy_ts_mvp/core/permissions/app_role.dart';
 import 'package:dioufy_ts_mvp/features/digital_display/services/digital_display_service.dart';
 import 'package:dioufy_ts_mvp/features/digital_display/presentation/digital_display_widget.dart';
+import 'package:dioufy_ts_mvp/features/digital_display/presentation/mobile_hero_slide_zone.dart';
 import 'package:dioufy_ts_mvp/features/digital_display/presentation/mobile_promo_card.dart';
 import 'package:dioufy_ts_mvp/features/landing/landing_screen.dart';
 import 'package:dioufy_ts_mvp/features/navigation/main_navigation_scaffold.dart';
@@ -109,10 +110,10 @@ void main() {
         ),
       );
 
-      // In mobile mode, DigitalDisplayWidget is replaced by compact MobilePromoCard
+      // In mobile mode, DigitalDisplayWidget is integrated as background MobileHeroSlideZone
       expect(find.text('DIOUFY-TS'), findsOneWidget);
       expect(find.text('Rechercher un trajet'), findsOneWidget);
-      expect(find.byType(MobilePromoCard), findsOneWidget);
+      expect(find.byType(MobileHeroSlideZone), findsOneWidget);
       expect(find.byType(DigitalDisplayWidget), findsNothing);
     });
 

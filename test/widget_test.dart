@@ -8,12 +8,12 @@ void main() {
     await tester.pump();
 
     // Vérifie la présence du titre Dioufy-TS et du slogan
-    expect(find.text('Dioufy-TS'), findsOneWidget);
-    expect(find.text('Fo nek sa gare fek lafa'), findsOneWidget);
+    expect(find.textContaining('DIOUFY-TS'), findsOneWidget);
+    expect(find.textContaining('Fo nek sa gare fek lafa'), findsOneWidget);
 
-    // Vérifie la présence des 3 options de la Landing Page
-    expect(find.text('CRÉER UN COMPTE'), findsOneWidget);
-    expect(find.text('SE CONNECTER'), findsOneWidget);
-    expect(find.text('Réserver sans compte (Voyageur direct)'), findsOneWidget);
+    // Vérifie la présence des options d'accueil de la Landing Page
+    expect(find.text('Créer un compte'), findsOneWidget);
+    expect(find.text('Se connecter'), findsOneWidget);
+    expect(find.text('Acheter un billet sans compte'), findsOneWidget);
   });
 }
