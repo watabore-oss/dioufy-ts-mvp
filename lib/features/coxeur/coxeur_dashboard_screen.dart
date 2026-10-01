@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../services/auth_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/audit_service.dart';
 import '../../services/scanner/scanner_service.dart';
 import '../chauffeur/qr_camera_scanner_screen.dart';
@@ -47,9 +47,11 @@ class CoxeurDashboardScreen extends StatefulWidget {
 }
 
 class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
-  String _selectedGare = 'Gare des Baux Maraîchers (Dakar)';
+  final String _selectedGare = 'Gare des Baux Maraîchers (Dakar)';
+  RealtimeChannel? _realtimeChannel;
+  bool _isLoading = false;
 
-  final List<QuaiDeparture> _departures = [
+  List<QuaiDeparture> _departures = [
     QuaiDeparture(
       id: 'DEP-01',
       busMatricule: 'DK-882-SN',
@@ -79,6 +81,126 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
     ),
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    _fetchDeparturesFromSupabase();
+    _subscribeToRealtime();
+  }
+
+  @override
+  void dispose() {
+    _realtimeChannel?.unsubscribe();
+    super.dispose();
+  }
+
+  void _subscribeToRealtime() {
+    try {
+      final client = Supabase.instance.client;
+      _realtimeChannel = client
+          .channel('public:trips:quai')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'trips',
+            callback: (payload) {
+              _fetchDeparturesFromSupabase();
+            },
+          )
+          .subscribe();
+    } catch (e) {
+      debugPrint('Realtime quai en attente (mode hors-ligne): $e');
+    }
+  }
+
+  Future<void> _fetchDeparturesFromSupabase() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+    try {
+      final client = Supabase.instance.client;
+      final response = await client
+          .from('trips')
+          .select('id, from_loc, to_loc, depart_at, seats_total, status, bus_id')
+          .order('depart_at', ascending: true)
+          .limit(10)
+          .timeout(const Duration(seconds: 3));
+
+      final list = response as List;
+      if (list.isNotEmpty) {
+        final List<QuaiDeparture> remote = [];
+        for (var row in list) {
+          final id = row['id']?.toString() ?? '';
+          final dest = row['to_loc']?.toString() ?? 'Gare';
+          final matricule = row['bus_id']?.toString() ??
+              'DK-${id.length >= 3 ? id.substring(0, 3).toUpperCase() : "001"}-SN';
+          final departAt = DateTime.tryParse(row['depart_at']?.toString() ?? '') ?? DateTime.now();
+          final heure =
+              '${departAt.hour.toString().padLeft(2, '0')}:${departAt.minute.toString().padLeft(2, '0')}';
+          final total = (row['seats_total'] as num?)?.toInt() ?? 45;
+          final st = _mapStatusFromDb(row['status']?.toString());
+
+          remote.add(QuaiDeparture(
+            id: id,
+            busMatricule: matricule,
+            destination: dest,
+            heure: heure,
+            totalSeats: total,
+            boardedSeats: 0,
+            status: st,
+          ));
+        }
+
+        if (remote.isNotEmpty && mounted) {
+          setState(() {
+            _departures = remote;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Chargement départs quai (repli local): $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  static BusDepartureStatus _mapStatusFromDb(String? dbStatus) {
+    switch (dbStatus?.toLowerCase()) {
+      case 'boarding':
+        return BusDepartureStatus.embarquement;
+      case 'ready':
+      case 'at_dock':
+        return BusDepartureStatus.aQuai;
+      case 'full':
+        return BusDepartureStatus.complet;
+      case 'departed':
+      case 'completed':
+        return BusDepartureStatus.parti;
+      default:
+        return BusDepartureStatus.preparation;
+    }
+  }
+
+  static String _statusToDbString(BusDepartureStatus status) {
+    switch (status) {
+      case BusDepartureStatus.preparation:
+        return 'scheduled';
+      case BusDepartureStatus.aQuai:
+        return 'at_dock';
+      case BusDepartureStatus.embarquement:
+        return 'boarding';
+      case BusDepartureStatus.complet:
+        return 'full';
+      case BusDepartureStatus.parti:
+        return 'departed';
+    }
+  }
+
+  static bool _isValidUuid(String val) {
+    final uuidRegex =
+        RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    return uuidRegex.hasMatch(val);
+  }
+
   void _advanceStatus(QuaiDeparture dep) {
     setState(() {
       switch (dep.status) {
@@ -98,6 +220,17 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
           break;
       }
     });
+
+    if (_isValidUuid(dep.id)) {
+      try {
+        Supabase.instance.client
+            .from('trips')
+            .update({'status': _statusToDbString(dep.status)})
+            .eq('id', dep.id)
+            .then((_) => debugPrint('Statut trip quai synchronisé : ${dep.id}'))
+            .catchError((e) => debugPrint('Erreur synchro statut quai: $e'));
+      } catch (_) {}
+    }
 
     AuditService.instance.logAction(
       action: 'departure.status_update',
@@ -161,8 +294,6 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = AuthService.instance.currentUser;
-
     return PopScope(
       canPop: true,
       child: Scaffold(
@@ -189,6 +320,17 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
             },
           ),
           actions: [
+            IconButton(
+              icon: _isLoading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1D4ED8)),
+                    )
+                  : const Icon(Icons.refresh, color: Color(0xFF0F172A)),
+              tooltip: 'Actualiser les départs',
+              onPressed: _fetchDeparturesFromSupabase,
+            ),
             Container(
               margin: const EdgeInsets.only(right: 14, top: 10, bottom: 10),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
@@ -224,7 +366,7 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
                   border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.03),
+                      color: Colors.black.withValues(alpha: 0.03),
                       blurRadius: 6,
                       offset: const Offset(0, 2),
                     ),
@@ -299,7 +441,7 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
         border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -324,9 +466,9 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: dep.status.color.withOpacity(0.12),
+                  color: dep.status.color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: dep.status.color.withOpacity(0.4)),
+                  border: Border.all(color: dep.status.color.withValues(alpha: 0.4)),
                 ),
                 child: Text(
                   dep.status.label,

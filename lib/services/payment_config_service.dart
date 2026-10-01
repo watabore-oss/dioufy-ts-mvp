@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -191,8 +190,9 @@ class PaymentConfigService extends ChangeNotifier {
       description: 'Agrégateur multi-opérateurs (Wave, OM, Carte Bancaire, Free Money)',
       isEnabled: true,
       merchantCode: 'PAYDUNYA-DIOUFY',
-      apiKey: 'master_key_sandbox_dioufy',
-      apiSecret: 'private_key_sandbox_dioufy',
+      // Les secrets API résident exclusivement sur Supabase Edge Functions / Vault
+      apiKey: null,
+      apiSecret: null,
       isTestMode: true,
       brandColorValue: 0xFF059669,
       iconIdentifier: 'paydunya',
@@ -204,8 +204,9 @@ class PaymentConfigService extends ChangeNotifier {
       description: 'Paiement Panafricain (Cartes Visa/Mastercard & Mobile Money)',
       isEnabled: true,
       merchantCode: 'FLW-DIOUFY-SN',
-      apiKey: 'FLWPUBK_TEST-SANDBOX-DIOUFY',
-      apiSecret: 'FLWSECK_TEST-SANDBOX-DIOUFY',
+      // Clé publique configurable via environnement, secret strictement côté serveur
+      apiKey: String.fromEnvironment('FLW_PUBLIC_KEY', defaultValue: ''),
+      apiSecret: null,
       isTestMode: true,
       brandColorValue: 0xFFFB923C,
       iconIdentifier: 'flutterwave',
@@ -217,8 +218,8 @@ class PaymentConfigService extends ChangeNotifier {
       description: 'Passerelle locale sénégalaise rapide (Wave, OM, Carte)',
       isEnabled: true,
       merchantCode: 'PAYTECH-774691379',
-      apiKey: 'paytech_api_key_sandbox',
-      apiSecret: 'paytech_secret_sandbox',
+      apiKey: null,
+      apiSecret: null,
       isTestMode: true,
       brandColorValue: 0xFF6366F1,
       iconIdentifier: 'paytech',

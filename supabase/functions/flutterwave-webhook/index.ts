@@ -68,29 +68,47 @@ export async function handler(req: Request): Promise<Response> {
     }
 
     if (tx.status === 'successful') {
-      // mark bookings as paid
       for (const bid of bookingIds) {
-        await supabase.from('bookings').update({ status: 'paid' }).eq('id', bid);
-        // generate ticket
-        const ticketPayload = { booking_id: bid, issued: new Date().toISOString() };
-        const signature = await generateTicketSignature(ticketPayload);
-        await supabase.from('tickets').insert({ booking_id: bid, payload: ticketPayload, signature });
-        // fire notification to customer
-        // retrieve user_id from booking row
+        // 1. Confirmation atomique transactionnelle DB
+        const { error: confirmErr } = await supabase.rpc('confirm_payment', {
+          p_booking_id: bid,
+          p_provider: 'Flutterwave',
+          p_provider_ref: flwRef,
+          p_amount: Math.floor((amount || 0) / (bookingIds.length || 1)),
+        });
+
+        if (confirmErr) {
+          console.error('Erreur confirm_payment RPC pour booking', bid, confirmErr);
+          continue;
+        }
+
+        // 2. Émission officielle du billet avec signature serveur cryptographique
+        const { data: ticketData, error: ticketErr } = await supabase.rpc('issue_ticket', {
+          p_booking_id: bid,
+        });
+
+        if (ticketErr) {
+          console.error('Erreur issue_ticket RPC pour booking', bid, ticketErr);
+        } else {
+          console.log('Billet émis avec succès:', ticketData?.ticket_number);
+        }
+
+        // 3. Notification push au passager
         const { data: bookingRow } = await supabase
           .from('bookings')
           .select('user_id')
           .eq('id', bid)
           .single();
+
         const userId = bookingRow?.user_id;
         if (userId) {
           await supabase.functions.invoke('send-notification', {
             body: JSON.stringify({
               user_id: userId,
-              title: 'Paiement reçu',
-              body: `Votre réservation ${bid} est confirmée`,
+              title: 'Paiement Flutterwave Validé',
+              body: `Votre billet pour la réservation ${bid} est prêt !`,
             }),
-          });
+          }).catch((e: any) => console.warn('Notification non délivrée:', e));
         }
       }
     }

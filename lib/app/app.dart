@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 import '../features/landing/landing_screen.dart';
 import '../features/navigation/main_navigation_scaffold.dart';
 import '../features/auth/reset_password_screen.dart';
+import '../services/version_check_service.dart';
 import 'router.dart';
 
 /// Widget racine de l'application Dioufy-TS
@@ -48,6 +49,12 @@ class DioufyApp extends StatelessWidget {
           home: homeWidget,
           onGenerateRoute: AppRouter.onGenerateRoute,
           debugShowCheckedModeBanner: false,
+          builder: (context, child) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              VersionCheckService.instance.showUpdateDialogIfNeeded(context);
+            });
+            return child ?? const SizedBox();
+          },
         );
       },
     );

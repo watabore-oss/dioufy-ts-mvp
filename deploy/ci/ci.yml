@@ -1,0 +1,109 @@
+name: Dioufy-TS CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality_checks:
+    name: 🧪 Quality Checks & Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Cloner le dépôt
+        uses: actions/checkout@v4
+
+      - name: ☕ Configurer Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 🐦 Installer Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: 📦 Restaurer le cache Pub
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      - name: 📥 Installer les dépendances Dart/Flutter
+        run: flutter pub get
+
+      - name: 🔍 Analyse statique stricte (Linter & Type Safety)
+        run: flutter analyze
+
+      - name: 🧪 Exécution des tests unitaires et intégration
+        run: flutter test --coverage
+
+  build_web_pwa:
+    name: 🌐 Build PWA / Flutter Web
+    needs: quality_checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Cloner le dépôt
+        uses: actions/checkout@v4
+
+      - name: 🐦 Installer Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: 📥 Installer les dépendances
+        run: flutter pub get
+
+      - name: 🏗️ Compiler la PWA Web
+        run: flutter build web --release --pwa-strategy=offline-first
+
+      - name: 📤 Sauvegarder l'artefact Web
+        uses: actions/upload-artifact@v4
+        with:
+          name: dioufy-web-pwa
+          path: build/web
+          retention-days: 7
+
+  build_android_apk:
+    name: 📱 Build Android APK
+    needs: quality_checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Cloner le dépôt
+        uses: actions/checkout@v4
+
+      - name: ☕ Configurer Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 🐦 Installer Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: 📥 Installer les dépendances
+        run: flutter pub get
+
+      - name: 🏗️ Compiler l'APK Android Release
+        run: flutter build apk --release --split-per-abi
+
+      - name: 📤 Sauvegarder les artefacts APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: dioufy-android-apks
+          path: build/app/outputs/flutter-apk/*.apk
+          retention-days: 7

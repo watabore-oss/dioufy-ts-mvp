@@ -12,6 +12,7 @@ import '../modules/payments/payments_module.dart';
 import '../modules/commissions/commissions_module.dart';
 import '../modules/fleet/fleet_module.dart';
 import '../modules/garage_assistance/garage_assistance_module.dart';
+import '../services/version_check_service.dart';
 
 /// Initialisation sécurisée et modulaire de l'application Dioufy-TS
 class AppBootstrap {
@@ -54,5 +55,8 @@ class AppBootstrap {
 
     // 8. Initialisation en arrière-plan des modules disponibles
     await ModuleRegistry.instance.initializeAll();
+
+    // 9. Vérification de la gouvernance applicative (versioning et mise à jour forcée)
+    VersionCheckService.instance.checkVersion();
   }
 }

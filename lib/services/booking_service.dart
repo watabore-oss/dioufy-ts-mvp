@@ -40,9 +40,10 @@ class BookingService {
       return const ['A3', 'B2', 'C5', 'D1'];
     }
 
-    if (_client != null) {
+    final client = _client;
+    if (client != null) {
       try {
-        final response = await _client!
+        final response = await client
             .from('seats')
             .select('seat_number, status, lock_until')
             .eq('trip_id', tripId)
@@ -75,12 +76,12 @@ class BookingService {
         }
         return occupied;
       } catch (e) {
-        debugPrint('Recuperation sieges Supabase rapide: $e');
+        debugPrint('Recuperation sieges Supabase : $e');
+        return const [];
       }
     }
 
-    // Repli local par defaut pour tests hors ligne
-    return const ['A3', 'B2', 'C5', 'D1'];
+    return const [];
   }
 
   /// Verrouille un siege de facon transactionnelle via la fonction RPC `lock_seat`.
@@ -96,21 +97,22 @@ class BookingService {
   }) async {
     final reqId = requestId ?? _generateRequestId('lock-seat');
 
-    // Trajets locaux / démo : réponse instantanée (0ms)
+    // Trajets locaux / démo hors-ligne (identifiants non-UUID)
     if (!_isValidUuid(tripId)) {
       final prefix = tripId.length >= 4 ? tripId.substring(0, 4) : tripId;
       return 'local_b_$prefix-$seatNumber';
     }
 
-    if (_client != null) {
+    final client = _client;
+    if (client != null) {
       try {
-        final res = await _client!.rpc('lock_seat', params: {
+        final res = await client.rpc('lock_seat', params: {
           'p_trip_id': tripId,
           'p_seat_number': seatNumber,
           'p_user_id': userId,
           'p_lock_minutes': lockMinutes,
           'p_request_id': reqId,
-        }).timeout(const Duration(milliseconds: 2000));
+        }).timeout(const Duration(milliseconds: 4000));
 
         if (res != null) {
           return res.toString();
@@ -118,16 +120,14 @@ class BookingService {
       } catch (e) {
         final errorMsg = e.toString().toLowerCase();
         if (errorMsg.contains('not available') || errorMsg.contains('already')) {
-          throw Exception('Le siege $seatNumber est deja reserve ou en cours de reservation.');
+          throw Exception('Le siège $seatNumber est déjà réservé ou en cours de réservation.');
         }
-        debugPrint('Avertissement lock_seat RPC rapide: $e');
-        final prefix = tripId.length >= 4 ? tripId.substring(0, 4) : tripId;
-        return 'local_b_$prefix-$seatNumber';
+        debugPrint('Erreur lock_seat RPC Supabase : $e');
+        throw Exception('Impossible de réserver le siège $seatNumber. Veuillez vérifier votre connexion et réessayer.');
       }
     }
 
-    // Mode simulation locale hors-ligne
-    return 'demo-booking-$tripId-$seatNumber';
+    throw Exception('Service de réservation temporairement indisponible. Veuillez réessayer.');
   }
 
   /// Verrouille plusieurs sieges de facon atomique.
@@ -172,10 +172,11 @@ class BookingService {
       return;
     }
 
-    if (_client != null) {
+    final client = _client;
+    if (client != null) {
       try {
         final reqId = requestId ?? _generateRequestId('release-seat');
-        await _client!.rpc('release_seat', params: {
+        await client.rpc('release_seat', params: {
           'p_booking_id': bookingId,
           'p_request_id': reqId,
         });
@@ -192,14 +193,15 @@ class BookingService {
     required String providerRef,
     required int amount,
   }) async {
+    final client = _client;
     for (var bookingId in bookingIds) {
       if (bookingId.startsWith('local_') || bookingId.startsWith('demo-')) {
         continue;
       }
 
-      if (_client != null) {
+      if (client != null) {
         try {
-          await _client!.rpc('confirm_payment', params: {
+          await client.rpc('confirm_payment', params: {
             'p_booking_id': bookingId,
             'p_provider': provider,
             'p_provider_ref': providerRef,

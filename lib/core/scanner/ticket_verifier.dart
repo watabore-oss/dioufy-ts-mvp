@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/ticket_service.dart';
 import 'qr_decoder.dart';
 import 'scan_session.dart';
@@ -8,6 +10,14 @@ import 'scanner_models.dart';
 /// Vérificateur cryptographique HMAC et métier de billets Dioufy (Offline-First & Persistant)
 class TicketVerifier {
   static const String _offlineQueueKey = 'dioufy_offline_scans_queue_v1';
+
+  static SupabaseClient? _getSupabaseClientSafely() {
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Alias de compatibilité ascendante
   static Future<ScanResult> verifyAndProcessTicket({
@@ -47,7 +57,84 @@ class TicketVerifier {
     }
 
     try {
-      // 3. Consultation du stockage local persistant (SharedPreferences)
+      // 3. Consultation prioritaire du serveur central PostgreSQL via la RPC atomique compost_ticket
+      final client = _getSupabaseClientSafely();
+      if (client != null) {
+        try {
+          final refToQuery = decoded.ticketId.isNotEmpty ? decoded.ticketId : cleanValue;
+          final dynamic rpcRes = await client.rpc('compost_ticket', params: {
+            'p_ticket_ref': refToQuery,
+          }).timeout(const Duration(milliseconds: 3000));
+
+          if (rpcRes is Map) {
+            final isSuccess = rpcRes['success'] == true;
+            final statusStr = rpcRes['status']?.toString();
+            final message = rpcRes['message']?.toString();
+
+            if (statusStr == 'ALREADY_USED') {
+              final usedAtStr = rpcRes['used_at']?.toString();
+              final usedAt = usedAtStr != null ? DateTime.tryParse(usedAtStr) : null;
+              return ScanResult.alreadyUsed(
+                rawValue: cleanValue,
+                ticketId: decoded.ticketId,
+                passengerName: decoded.passengerName,
+                passengerPhone: decoded.passengerPhone,
+                seatNumber: decoded.seatNumber,
+                route: decoded.route,
+                usedAt: usedAt,
+                message: message ?? 'Attention : Ce billet a déjà été composté.',
+                isDuplicateInSession: false,
+              );
+            }
+
+            if (statusStr == 'UNPAID') {
+              return ScanResult.invalid(
+                rawValue: cleanValue,
+                status: TicketVerificationStatus.ticketNotFound,
+                message: message ?? 'Billet non payé ou annulé.',
+              );
+            }
+
+            if (statusStr == 'WRONG_TRIP') {
+              return ScanResult.invalid(
+                rawValue: cleanValue,
+                status: TicketVerificationStatus.invalidRoute,
+                message: message ?? 'Billet valide pour un autre trajet.',
+              );
+            }
+
+            if (isSuccess && statusStr == 'VALIDATED') {
+              session.registerProcessed(cleanValue);
+              session.registerProcessed(decoded.ticketId);
+              await TicketService.markTicketUsed(decoded.ticketId);
+
+              return ScanResult.success(
+                rawValue: cleanValue,
+                ticketId: decoded.ticketId,
+                passengerName: decoded.passengerName,
+                passengerPhone: decoded.passengerPhone,
+                seatNumber: decoded.seatNumber,
+                route: decoded.route,
+                departure: decoded.departure,
+                arrival: decoded.arrival,
+                departureStation: decoded.departureStation,
+                arrivalStation: decoded.arrivalStation,
+                company: decoded.company,
+                date: decoded.date,
+                time: decoded.time,
+                amount: decoded.amount,
+                payload: decoded.payload,
+                message: message ?? 'Billet certifié et composté sur le serveur central',
+                isOfflineVerified: false,
+              );
+            }
+          }
+        } catch (e) {
+          debugPrint('Vérification temps réel Supabase non disponible (repli hors-ligne): $e');
+        }
+      }
+
+      // 4. Consultation du stockage local persistant (SharedPreferences)
       final localTickets = await TicketService.getLocalTickets();
       Map<String, dynamic>? matchingTicket;
 
@@ -59,7 +146,7 @@ class TicketVerifier {
         }
       }
 
-      // 4. Cas : Billet déjà composté dans l'historique persistant
+      // 5. Cas : Billet déjà composté dans l'historique persistant local
       if (matchingTicket != null && matchingTicket['status'] == 'used') {
         final usedAtStr = matchingTicket['used_at']?.toString();
         final usedAt = usedAtStr != null ? DateTime.tryParse(usedAtStr) : null;
@@ -81,7 +168,7 @@ class TicketVerifier {
         );
       }
 
-      // 5. Cas : Billet structuré avec signature cryptographique HMAC-SHA256
+      // 6. Cas : Billet structuré avec signature cryptographique HMAC-SHA256 (Mode secours hors-ligne)
       if (decoded.isStructuredJson && decoded.payload != null) {
         final signature = decoded.signature;
         final isValidSignature = signature != null && TicketService.verify(decoded.payload!, signature);
@@ -121,7 +208,7 @@ class TicketVerifier {
         session.registerProcessed(cleanValue);
         session.registerProcessed(decoded.ticketId);
 
-        // Mettre en file d'attente hors-ligne
+        // Mettre en file d'attente hors-ligne pour synchronisation ultérieure
         await _enqueueOfflineScan(
           ticketId: decoded.ticketId,
           rawValue: cleanValue,
@@ -144,12 +231,12 @@ class TicketVerifier {
           time: decoded.time,
           amount: decoded.amount,
           payload: decoded.payload,
-          message: 'Billet certifié authentique',
+          message: 'Billet certifié authentique (validé hors-ligne)',
           isOfflineVerified: true,
         );
       }
 
-      // 6. Cas : Billet non structuré mais trouvé dans les réservations locales (ex: Saisie manuelle de référence)
+      // 7. Cas : Billet non structuré mais trouvé dans les réservations locales (ex: Saisie manuelle de référence)
       if (matchingTicket != null) {
         await TicketService.markTicketUsed(decoded.ticketId);
         session.registerProcessed(cleanValue);
@@ -184,36 +271,12 @@ class TicketVerifier {
           time: tripMap?['time']?.toString(),
           amount: amount,
           payload: matchingTicket,
-          message: 'Billet vérifié avec succès',
+          message: 'Billet vérifié avec succès (base locale)',
           isOfflineVerified: true,
         );
       }
 
-      // 7. Si le format commence par TICK- ou DIOUFY- ou REF-, création d'une validation permissive pour tests/démo si non structuré
-      if (cleanValue.toUpperCase().startsWith('TICK-') ||
-          cleanValue.toUpperCase().startsWith('DIOUFY-') ||
-          cleanValue.toUpperCase().startsWith('REF-')) {
-        session.registerProcessed(cleanValue);
-        session.registerProcessed(decoded.ticketId);
-
-        await _enqueueOfflineScan(
-          ticketId: decoded.ticketId,
-          rawValue: cleanValue,
-          scannedAt: DateTime.now(),
-        );
-
-        return ScanResult.success(
-          rawValue: cleanValue,
-          ticketId: decoded.ticketId,
-          passengerName: decoded.passengerName,
-          seatNumber: decoded.seatNumber,
-          route: decoded.route,
-          message: 'Référence billet validée',
-          isOfflineVerified: true,
-        );
-      }
-
-      // 8. Billet non reconnu
+      // 8. Billet non reconnu : AUCUN passe-droit sans preuve serveur ou cryptographique
       return ScanResult.invalid(
         rawValue: cleanValue,
         status: TicketVerificationStatus.ticketNotFound,

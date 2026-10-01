@@ -61,17 +61,20 @@ class _ClotureCaisseScreenState extends State<ClotureCaisseScreen> {
       isClosed: true,
     );
 
-    await CashRegisterService.saveSession(session);
+    final savedSession = await CashRegisterService.saveSession(session);
 
     if (mounted) {
       setState(() {
         _isSaved = true;
-        _closedSession = session;
+        _closedSession = savedSession;
       });
+      final msg = savedSession.isSynced
+          ? "Clôture de caisse validée et certifiée par le serveur !"
+          : "Clôture de caisse enregistrée avec succès (mode hors-ligne) !";
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Clôture de caisse enregistrée avec succès !"),
-          backgroundColor: Color(0xFF059669),
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: const Color(0xFF059669),
         ),
       );
     }
@@ -201,7 +204,7 @@ class _ClotureCaisseScreenState extends State<ClotureCaisseScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.2),
+        color: color.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: color),
       ),
@@ -239,7 +242,7 @@ class _ClotureCaisseScreenState extends State<ClotureCaisseScreen> {
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.06),
+                color: Colors.white.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: Colors.white12),
               ),
@@ -274,7 +277,7 @@ class _ClotureCaisseScreenState extends State<ClotureCaisseScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFBBF24).withOpacity(0.15),
+                      color: const Color(0xFFFBBF24).withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: const Color(0xFFFBBF24)),
                     ),
@@ -566,7 +569,7 @@ class _ClotureCaisseScreenState extends State<ClotureCaisseScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
