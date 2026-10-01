@@ -195,9 +195,9 @@ Log-Info "Mode Direct 100% Automatique : Televersement des fichiers decompressé
 Write-Host "-> Aucun besoin d'extraire dans cPanel : l'application sera directement en ligne !" -ForegroundColor Green
 
 try {
-    # 1. Lister tous les fichiers et dossiers (y compris les caches et dotfiles comme .htaccess)
+    # 1. Lister tous les fichiers et dossiers (exclusion des fichiers temporaires/backups)
     $allItems = Get-ChildItem -Path $BuildWebDir -Recurse -Force
-    $allFiles = $allItems | Where-Object { -not $_.PSIsContainer }
+    $allFiles = $allItems | Where-Object { -not $_.PSIsContainer -and $_.Name -notmatch "_backup" }
     $allDirs  = $allItems | Where-Object { $_.PSIsContainer }
 
     $totalFiles = $allFiles.Count
@@ -211,7 +211,7 @@ try {
 
     $hasCurl = (Get-Command curl.exe -ErrorAction SilentlyContinue) -ne $null
     if ($hasCurl) {
-        Log-Info "Moteur de transfert : cURL haute performance avec creation automatique des dossiers distants."
+        Log-Info "Moteur de transfert : cURL haute performance (PASV, retries et protection cPanel)."
     }
 
     $fileIndex = 0
@@ -221,24 +221,46 @@ try {
         $targetFileUri = "$ftpBaseUri$relFilePath"
 
         Write-Host -NoNewline "`r[INFO] Envoi direct ($fileIndex/$totalFiles) : $relFilePath                    "
-        if ($hasCurl) {
-            & curl.exe -s --ftp-create-dirs -T "$($f.FullName)" --user "$($FtpUser):$($FtpPassword)" "$targetFileUri"
-            if ($LASTEXITCODE -ne 0) {
-                throw "Echec curl (code $LASTEXITCODE) lors du televersement de $relFilePath"
-            }
-        } else {
-            $parentDir = [System.IO.Path]::GetDirectoryName($relFilePath).Replace("\", "/")
-            if ($parentDir) {
-                Ensure-FtpDirectory -BaseUri $ftpBaseUri -RelativeDirPath $parentDir -Credentials $credentials
-            }
-            $wc = New-Object System.Net.WebClient
-            $wc.Credentials = $credentials
-            try {
-                $wc.UploadFile($targetFileUri, $f.FullName)
-            } finally {
-                $wc.Dispose()
+        
+        $uploaded = $false
+        $attempts = 0
+        $maxAttempts = 3
+
+        while (-not $uploaded -and $attempts -lt $maxAttempts) {
+            $attempts++
+            if ($hasCurl) {
+                & curl.exe -s --disable-epsv --ftp-pasv --connect-timeout 25 --max-time 180 --retry 2 --retry-delay 3 --ftp-create-dirs -T "$($f.FullName)" --user "$($FtpUser):$($FtpPassword)" "$targetFileUri"
+                if ($LASTEXITCODE -eq 0) {
+                    $uploaded = $true
+                } else {
+                    Write-Host "`n[WARN] Tentative $attempts/$maxAttempts pour $relFilePath (Code curl: $LASTEXITCODE). Pause 3s..." -ForegroundColor Yellow
+                    Start-Sleep -Seconds 3
+                }
+            } else {
+                $parentDir = [System.IO.Path]::GetDirectoryName($relFilePath).Replace("\", "/")
+                if ($parentDir) {
+                    Ensure-FtpDirectory -BaseUri $ftpBaseUri -RelativeDirPath $parentDir -Credentials $credentials
+                }
+                $wc = New-Object System.Net.WebClient
+                $wc.Credentials = $credentials
+                try {
+                    $wc.UploadFile($targetFileUri, $f.FullName)
+                    $uploaded = $true
+                } catch {
+                    Write-Host "`n[WARN] Tentative $attempts/$maxAttempts : $($_.Exception.Message). Pause 3s..." -ForegroundColor Yellow
+                    Start-Sleep -Seconds 3
+                } finally {
+                    $wc.Dispose()
+                }
             }
         }
+
+        if (-not $uploaded) {
+            throw "Echec apres $maxAttempts tentatives lors du televersement de $relFilePath"
+        }
+
+        # Petite temporisation pour respecter les quotas de connexions FTP par seconde cPanel
+        Start-Sleep -Milliseconds 250
     }
     Write-Host ""
 

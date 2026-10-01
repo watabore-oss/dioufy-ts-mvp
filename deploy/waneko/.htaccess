@@ -56,7 +56,7 @@ DirectoryIndex index.html index.php
   </FilesMatch>
 
   # Favicons, logos et manifest : revalidation fréquente pour les moteurs de recherche (Google, Bing)
-  <FilesMatch "(favicon|logo|dioufy|manifest).*\.(ico|png|jpeg|jpg|json|svg)$">
+  <FilesMatch "(favicon|logo|dioufy|Icon|icon|manifest).*\.(ico|png|jpeg|jpg|json|svg)$">
     Header set Cache-Control "public, max-age=3600, must-revalidate"
     Header unset Expires
   </FilesMatch>
