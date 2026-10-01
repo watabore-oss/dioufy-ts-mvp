@@ -450,14 +450,13 @@ class _LandingScreenState extends State<LandingScreen> {
           // EN-TÊTE MOBILE : Logo aligné à gauche, Sélecteur multilingue aligné à droite
           _buildLeftPaneHeader(isMobile: true),
 
-          // CONTENU SCROLLABLE MOBILE : Tous les autres éléments sont centrés
+          // CONTENU SCROLLABLE MOBILE
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // ZONE D'ACCUEIL AVEC SLIDES EN ARRIÈRE-PLAN (Harmonie & Taille adéquate)
+                  // ZONE D'ACCUEIL AVEC SLIDES EN ARRIÈRE-PLAN (100% Edge-to-Edge natif, zéro padding externe)
                   MobileHeroSlideZone(
                     onLogin: () {
                       Navigator.push(
@@ -474,20 +473,29 @@ class _LandingScreenState extends State<LandingScreen> {
                     onExploreDestinations: _showPopularDestinationsModal,
                   ),
 
-                  // CARTE FORMULAIRE DE RECHERCHE MOBILE
-                  _buildSearchBookingCard(isMobile: true),
+                  // CONTENU PRINCIPAL AVEC PADDING LATÉRAL (Formulaire, Réassurance, Footer)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // CARTE FORMULAIRE DE RECHERCHE MOBILE
+                        _buildSearchBookingCard(isMobile: true),
 
-                  const SizedBox(height: 18),
+                        const SizedBox(height: 18),
 
-                  // PILIERS DE RÉASSURANCE CENTRÉS
-                  _buildTrustBadgesRow(isMobile: true),
+                        // PILIERS DE RÉASSURANCE CENTRÉS
+                        _buildTrustBadgesRow(isMobile: true),
 
-                  const SizedBox(height: 22),
+                        const SizedBox(height: 22),
 
-                  // FOOTER ET MENTIONS LÉGALES CENTRÉS
-                  _buildLegalFooter(),
+                        // FOOTER ET MENTIONS LÉGALES CENTRÉS
+                        _buildLegalFooter(),
 
-                  const SizedBox(height: 16),
+                        const SizedBox(height: 16),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),

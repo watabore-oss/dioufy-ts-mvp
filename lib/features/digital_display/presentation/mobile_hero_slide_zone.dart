@@ -20,6 +20,7 @@ class MobileHeroSlideZone extends StatefulWidget {
   final VoidCallback onRegister;
   final VoidCallback? onExploreDestinations;
   final String? slogan;
+  final BorderRadiusGeometry borderRadius;
 
   const MobileHeroSlideZone({
     super.key,
@@ -27,6 +28,7 @@ class MobileHeroSlideZone extends StatefulWidget {
     required this.onRegister,
     this.onExploreDestinations,
     this.slogan,
+    this.borderRadius = const BorderRadius.vertical(bottom: Radius.circular(24)),
   });
 
   @override
@@ -97,11 +99,10 @@ class _MobileHeroSlideZoneState extends State<MobileHeroSlideZone> {
 
     return Container(
       width: double.infinity,
-      constraints: const BoxConstraints(maxWidth: 540),
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: EdgeInsets.zero,
       decoration: BoxDecoration(
         color: const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: widget.borderRadius,
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF0F172A).withValues(alpha: 0.18),
@@ -111,7 +112,7 @@ class _MobileHeroSlideZoneState extends State<MobileHeroSlideZone> {
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: widget.borderRadius,
         child: Stack(
           children: [
             // =================================================================
