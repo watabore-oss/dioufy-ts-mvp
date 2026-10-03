@@ -74,9 +74,9 @@ class DioufyTypography {
   static const double screenTitleLarge = 30.0; // Hero titles
   static const double amountHero = 32.0; // Montant paiement
 
-  // Hauteurs de ligne ergonomiques
-  static const double heightTight = 1.2;
-  static const double heightNormal = 1.4;
+  // Hauteurs de ligne ergonomiques (prévention stricte de l écrasement vertical)
+  static const double heightTight = 1.35;
+  static const double heightNormal = 1.45;
   static const double heightRelaxed = 1.6;
 
   // Poids

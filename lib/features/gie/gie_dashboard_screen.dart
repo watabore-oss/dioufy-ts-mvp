@@ -144,24 +144,61 @@ class _GieDashboardScreenState extends State<GieDashboardScreen> with SingleTick
           final amt = (p['amount'] as num?)?.toInt() ?? 0;
           totalJour += amt;
         }
-      } catch (_) {}
+        // Calcul du taux de remplissage réel à partir des sièges vendus
+        int totalCapacityAllTrips = 0;
+        int totalSoldSeats = 0;
+        final tripIds = tripsRes.map((t) => t['id']?.toString()).whereType<String>().toList();
 
-      final pendingCaisses = fetchedCaisses.where((c) => c['status'] == 'closed' || c['status'] == 'open').length;
+        for (var t in tripsRes) {
+          final seatsCount = (t['seats_count'] as num?)?.toInt() ?? 36;
+          totalCapacityAllTrips += seatsCount;
+        }
 
-      if (mounted) {
-        setState(() {
-          _flotte = fetchedVehicles;
-          _caisses = fetchedCaisses;
-          _recettesJour = totalJour;
-          _voyagesCount = tripsCount;
-          _busActifs = busCount;
-          _caissesAValider = pendingCaisses;
-          _tauxRemplissage = tripsCount > 0 ? 82 : 0;
-          _isLoading = false;
-        });
+        if (tripIds.isNotEmpty) {
+          final seatsRes = await client
+              .from('seats')
+              .select('id, status')
+              .inFilter('trip_id', tripIds);
+
+          for (var s in seatsRes) {
+            final st = s['status']?.toString();
+            if (st == 'sold' || st == 'occupied') {
+              totalSoldSeats++;
+            }
+          }
+        }
+
+        int calculatedRemplissage = 0;
+        if (totalCapacityAllTrips > 0) {
+          calculatedRemplissage = ((totalSoldSeats / totalCapacityAllTrips) * 100).round();
+        }
+
+        final pendingCaisses = fetchedCaisses.where((c) => c['status'] == 'closed' || c['status'] == 'open').length;
+
+        if (mounted) {
+          setState(() {
+            _flotte = fetchedVehicles;
+            _caisses = fetchedCaisses;
+            _recettesJour = totalJour;
+            _voyagesCount = tripsCount;
+            _busActifs = busCount;
+            _caissesAValider = pendingCaisses;
+            _tauxRemplissage = calculatedRemplissage;
+            _isLoading = false;
+          });
+        }
+      } catch (e) {
+        debugPrint('[GieDashboard] Erreur calcul stats GIE: $e');
+        if (mounted) {
+          setState(() {
+            _flotte = fetchedVehicles;
+            _caisses = fetchedCaisses;
+            _isLoading = false;
+          });
+        }
       }
     } catch (e) {
-      debugPrint('Erreur chargement données GIE: $e');
+      debugPrint('[GieDashboard] Erreur chargement données GIE: $e');
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -567,10 +604,27 @@ class _GieDashboardScreenState extends State<GieDashboardScreen> with SingleTick
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black54)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black54,
+                    height: 1.3,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: color)),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w900,
+                    color: color,
+                    height: 1.35,
+                  ),
+                ),
               ],
             ),
           ),

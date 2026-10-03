@@ -1,6 +1,9 @@
 // @ts-nocheck
 // Supabase Edge Function: Initiation sécurisée de session de paiement
-// Fournisseurs supportés : Wave Sénégal (Checkout API v1), Flutterwave v3, Orange Money, Cash
+// Fournisseurs supportés : Wave Sénégal (Checkout API v1), Flutterwave v3
+// RÈGLE P0 DE L'AUDIT : Le montant est obligatoirement validé et calculé côté serveur
+// depuis la base de données centrale. Aucun montant arbitraire client n'est accepté.
+// Aucun faux repli simulant un paiement réussi.
 
 import { serve } from 'https://deno.land/std@0.201.0/http/server.ts';
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
@@ -22,7 +25,6 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 });
 
 export async function handler(req: Request): Promise<Response> {
-  // Gestion de la négociation CORS (OPTIONS)
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -39,7 +41,6 @@ export async function handler(req: Request): Promise<Response> {
     const {
       booking_ids,
       provider = 'wave',
-      amount,
       customer_name = 'Voyageur Dioufy',
       customer_phone = '221774691379',
       customer_email = 'passager@dioufy.sn',
@@ -47,7 +48,7 @@ export async function handler(req: Request): Promise<Response> {
       error_url = 'https://dioufy.sn/payment/cancel',
     } = body;
 
-    // 1. Validation stricte des données d'entrée
+    // 1. Validation stricte des réservations
     if (!booking_ids || !Array.isArray(booking_ids) || booking_ids.length === 0) {
       return new Response(
         JSON.stringify({ error: 'La liste booking_ids est obligatoire et ne peut être vide.' }),
@@ -55,176 +56,188 @@ export async function handler(req: Request): Promise<Response> {
       );
     }
 
-    if (!amount || typeof amount !== 'number' || amount <= 0) {
+    // Interdire tout ID local ou de démo en production
+    const invalidIds = booking_ids.filter(
+      (id: string) => typeof id !== 'string' || id.startsWith('local_') || id.startsWith('demo-')
+    );
+    if (invalidIds.length > 0) {
       return new Response(
-        JSON.stringify({ error: 'Le montant amount doit être un entier positif.' }),
+        JSON.stringify({ error: 'Identifiants de réservation non valides. Seules les réservations réelles sont acceptées.' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Filtrer les réservations de démo ou locales
-    const realBookingIds = booking_ids.filter(
-      (id: string) => !id.startsWith('local_') && !id.startsWith('demo-')
-    );
+    // 2. Contrôle d'existence et calcul souverain du montant côté serveur
+    const { data: bookings, error: bookingsErr } = await supabase
+      .from('bookings')
+      .select('id, status, trip_id, trips(price)')
+      .in('id', booking_ids);
 
-    // 2. Contrôle d'existence et d'intégrité en base si réservations réelles
-    if (realBookingIds.length > 0) {
-      const { data: bookings, error: bookingsErr } = await supabase
-        .from('bookings')
-        .select('id, status, seat_number, trip_id')
-        .in('id', realBookingIds);
+    if (bookingsErr || !bookings || bookings.length !== booking_ids.length) {
+      return new Response(
+        JSON.stringify({ error: 'Impossible de vérifier l ensemble des réservations en base.' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
-      if (bookingsErr || !bookings || bookings.length === 0) {
+    // Vérifier qu'aucune réservation n'est déjà payée ou annulée
+    for (const b of bookings) {
+      if (b.status === 'paid') {
         return new Response(
-          JSON.stringify({ error: 'Impossible de vérifier les réservations en base.' }),
-          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      // Vérifier qu'aucune réservation n'est déjà vendue ou annulée
-      const alreadyPaid = bookings.find((b: any) => b.status === 'paid');
-      if (alreadyPaid) {
-        return new Response(
-          JSON.stringify({ error: `La réservation ${alreadyPaid.id} a déjà été payée.` }),
+          JSON.stringify({ error: `La réservation ${b.id} a déjà été payée.` }),
           { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+      if (b.status === 'cancelled') {
+        return new Response(
+          JSON.stringify({ error: `La réservation ${b.id} a été annulée.` }),
+          { status: 410, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
-    const clientRef = booking_ids.join(',');
-    const txRef = `dioufy_${Date.now()}_${booking_ids[0].substring(0, 8)}`;
+    // Calcul du montant exact en FCFA à partir des prix des trajets officiels
+    let serverCalculatedAmount = 0;
+    for (const b of bookings) {
+      const tripPrice = b.trips?.price;
+      if (typeof tripPrice !== 'number' || tripPrice <= 0) {
+        return new Response(
+          JSON.stringify({ error: `Tarif du trajet introuvable pour la réservation ${b.id}.` }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      serverCalculatedAmount += tripPrice;
+    }
 
-    // 3. Routage vers la passerelle de paiement adéquate
+    if (serverCalculatedAmount <= 0) {
+      return new Response(
+        JSON.stringify({ error: 'Montant total invalide calculé par le serveur.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Encodage standard sans ambiguïté des booking IDs (séparateur virgule)
+    const clientRef = booking_ids.join(',');
+    const timestamp = Date.now();
+    const txRef = `dioufy_${clientRef}_${timestamp}`;
+
     const normalizedProvider = provider.toLowerCase();
 
-    // === OPTION A : Wave Sénégal ===
+    // === OPTION A : Wave Sénégal (Checkout API v1) ===
     if (normalizedProvider === 'wave') {
-      if (WAVE_API_KEY) {
-        // Appel officiel Wave Checkout API v1
-        const waveRes = await fetch('https://api.wave.com/v1/checkout/sessions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${WAVE_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            amount: amount.toString(),
-            currency: 'XOF',
-            error_url: error_url,
-            success_url: success_url,
-            client_reference: clientRef,
+      if (!WAVE_API_KEY) {
+        return new Response(
+          JSON.stringify({
+            error: 'Passerelle Wave non configurée sur le serveur. Veuillez contacter le support ou choisir un autre moyen.',
           }),
-        });
-
-        if (waveRes.ok) {
-          const waveData = await waveRes.json();
-          return new Response(
-            JSON.stringify({
-              provider: 'wave',
-              checkout_url: waveData.wave_launch_url || waveData.checkout_url,
-              session_id: waveData.id,
-              client_reference: clientRef,
-            }),
-            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        } else {
-          console.warn('Wave API a retourné une erreur, repli sur le code marchand direct');
-        }
+          { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
 
-      // Repli par défaut : compte marchand Wave Sénégal officiel
+      const waveRes = await fetch('https://api.wave.com/v1/checkout/sessions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${WAVE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: serverCalculatedAmount.toString(),
+          currency: 'XOF',
+          error_url: error_url,
+          success_url: success_url,
+          client_reference: clientRef,
+        }),
+      });
+
+      if (!waveRes.ok) {
+        const errorText = await waveRes.text();
+        console.error('Erreur Wave Checkout API:', errorText);
+        return new Response(
+          JSON.stringify({ error: 'La passerelle Wave est momentanément indisponible.' }),
+          { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const waveData = await waveRes.json();
       return new Response(
         JSON.stringify({
           provider: 'wave',
-          mode: 'merchant_qr',
-          merchant_code: '774691379',
-          amount: amount,
-          currency: 'FCFA',
+          checkout_url: waveData.wave_launch_url || waveData.checkout_url,
+          session_id: waveData.id,
           client_reference: clientRef,
-          instructions: 'Effectuez le paiement vers le numéro Wave 774691379.',
+          amount: serverCalculatedAmount,
+          currency: 'FCFA',
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // === OPTION B : Flutterwave ===
+    // === OPTION B : Flutterwave v3 ===
     if (normalizedProvider === 'flutterwave') {
-      if (FLW_SECRET_KEY) {
-        const flwRes = await fetch('https://api.flutterwave.com/v3/payments', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${FLW_SECRET_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            tx_ref: txRef,
-            amount: amount.toString(),
-            currency: 'XOF',
-            redirect_url: success_url,
-            customer: {
-              name: customer_name,
-              phonenumber: customer_phone,
-              email: customer_email,
-            },
-            customizations: {
-              title: 'Dioufy-TS',
-              description: `Paiement ${booking_ids.length} place(s)`,
-            },
+      if (!FLW_SECRET_KEY) {
+        return new Response(
+          JSON.stringify({
+            error: 'Passerelle Flutterwave non configurée sur le serveur.',
           }),
-        });
-
-        if (flwRes.ok) {
-          const flwData = await flwRes.json();
-          return new Response(
-            JSON.stringify({
-              provider: 'flutterwave',
-              checkout_url: flwData.data?.link,
-              tx_ref: txRef,
-              client_reference: clientRef,
-            }),
-            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
+          { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
 
+      const flwRes = await fetch('https://api.flutterwave.com/v3/payments', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${FLW_SECRET_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tx_ref: txRef,
+          amount: serverCalculatedAmount.toString(),
+          currency: 'XOF',
+          redirect_url: success_url,
+          customer: {
+            name: customer_name,
+            phonenumber: customer_phone,
+            email: customer_email,
+          },
+          meta: {
+            booking_ids: clientRef,
+          },
+          customizations: {
+            title: 'Dioufy-TS',
+            description: `Paiement ${booking_ids.length} place(s)`,
+          },
+        }),
+      });
+
+      if (!flwRes.ok) {
+        const errorText = await flwRes.text();
+        console.error('Erreur Flutterwave API:', errorText);
+        return new Response(
+          JSON.stringify({ error: 'La passerelle Flutterwave est momentanément indisponible.' }),
+          { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const flwData = await flwRes.json();
       return new Response(
         JSON.stringify({
           provider: 'flutterwave',
+          checkout_url: flwData.data?.link,
           tx_ref: txRef,
-          amount: amount,
           client_reference: clientRef,
-          status: 'pending_client_sdk',
+          amount: serverCalculatedAmount,
+          currency: 'FCFA',
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // === OPTION C : Espèces / Quai ===
-    if (normalizedProvider === 'cash') {
-      return new Response(
-        JSON.stringify({
-          provider: 'cash',
-          status: 'pending_cash_collection',
-          client_reference: clientRef,
-          amount: amount,
-          message: 'Règlement en espèces au guichet ou quai par le coxeur.',
-        }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Autres passerelles génériques
     return new Response(
-      JSON.stringify({
-        provider: normalizedProvider,
-        status: 'initialized',
-        client_reference: clientRef,
-        amount: amount,
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: `Moyen de paiement non pris en charge : ${provider}` }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (err: any) {
-    console.error('Erreur initiation paiement:', err);
+    console.error('Erreur interne initiation paiement:', err);
     return new Response(
       JSON.stringify({ error: err.message || 'Erreur interne du serveur' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

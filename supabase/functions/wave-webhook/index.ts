@@ -1,6 +1,8 @@
 // @ts-nocheck
 // Supabase Edge Function: Réception et validation cryptographique des webhooks Wave Sénégal
-// Référentiels : Wave Checkout API v1, OWASP ASVS
+// RÈGLE P0 DE L'AUDIT :
+// 1. Signature Wave OBLIGATOIRE si configurée (rejet 401 si absente ou invalide).
+// 2. Traitement idempotent et confirmation atomique via confirm_payment.
 
 import { serve } from 'https://deno.land/std@0.201.0/http/server.ts';
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
@@ -25,8 +27,16 @@ export async function handler(req: Request): Promise<Response> {
     const rawBody = await req.text();
     const signature = req.headers.get('wave-signature');
 
-    // Vérification de la signature cryptographique Wave si le secret est configuré
-    if (WAVE_WEBHOOK_SECRET && signature) {
+    // CONTRÔLE DE SIGNATURE CRYPTOGRAPHIQUE WAVE OBLIGATOIRE
+    if (WAVE_WEBHOOK_SECRET) {
+      if (!signature) {
+        console.warn('Wave webhook : En-tête wave-signature manquant');
+        return new Response(JSON.stringify({ error: 'En-tête de signature manquant' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
       const encoder = new TextEncoder();
       const keyData = encoder.encode(WAVE_WEBHOOK_SECRET);
       const key = await crypto.subtle.importKey(
@@ -45,7 +55,7 @@ export async function handler(req: Request): Promise<Response> {
       );
 
       if (!isValid) {
-        console.warn('Wave webhook: Signature invalide');
+        console.warn('Wave webhook : Signature HMAC invalide');
         return new Response(JSON.stringify({ error: 'Signature invalide' }), {
           status: 401,
           headers: { 'Content-Type': 'application/json' },
@@ -54,7 +64,7 @@ export async function handler(req: Request): Promise<Response> {
     }
 
     const event = JSON.parse(rawBody);
-    console.log('Wave webhook reçu:', event.type || event.event);
+    console.log('Wave webhook validé :', event.type || event.event);
 
     const data = event.data || event;
     const clientRef = data.client_reference || data.checkout_session_id;
@@ -62,7 +72,7 @@ export async function handler(req: Request): Promise<Response> {
     const amount = parseInt(data.amount || '0', 10);
 
     if (!clientRef) {
-      console.warn('Wave webhook: Référence client absente');
+      console.warn('Wave webhook : client_reference absente');
       return new Response(JSON.stringify({ error: 'Missing client_reference' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
@@ -71,11 +81,11 @@ export async function handler(req: Request): Promise<Response> {
 
     // Extraction des booking_ids (supporte identifiant unique ou liste séparée par virgule)
     const bookingIds: string[] = clientRef.includes(',')
-      ? clientRef.split(',').map((id: string) => id.trim())
+      ? clientRef.split(',').map((id: string) => id.trim()).filter(Boolean)
       : [clientRef.trim()];
 
     for (const bookingId of bookingIds) {
-      // 1. Confirmation atomique du paiement et passage des sièges à 'sold'
+      // 1. Confirmation atomique transactionnelle DB
       const { data: confirmRes, error: confirmErr } = await supabase.rpc('confirm_payment', {
         p_booking_id: bookingId,
         p_provider: 'Wave',
@@ -88,18 +98,9 @@ export async function handler(req: Request): Promise<Response> {
         continue;
       }
 
-      // 2. Émission officielle du billet cryptographiquement certifié par le serveur
-      const { data: ticketRes, error: ticketErr } = await supabase.rpc('issue_ticket', {
-        p_booking_id: bookingId,
-      });
+      console.log(`Billet et commissions validés pour réservation ${bookingId}`);
 
-      if (ticketErr) {
-        console.error('Erreur issue_ticket RPC pour booking', bookingId, ticketErr);
-      } else {
-        console.log('Billet officiel émis avec succès:', ticketRes?.ticket_number);
-      }
-
-      // 3. Notification push optionnelle
+      // 2. Notification push au voyageur
       const { data: bookingRow } = await supabase
         .from('bookings')
         .select('user_id')

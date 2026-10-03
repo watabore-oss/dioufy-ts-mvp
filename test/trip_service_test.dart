@@ -1,4 +1,4 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:dioufy_ts_mvp/features/search/trip.dart';
 import 'package:dioufy_ts_mvp/services/trip_service.dart';
 import 'package:dioufy_ts_mvp/services/booking_service.dart';
@@ -36,50 +36,36 @@ void main() {
     });
   });
 
-  group('TripService', () {
-    test('searchTrips returns matching routes for Dakar to Thiès', () async {
+  group('TripService (Supabase Source Unique de Vérité)', () {
+    test('searchTrips lève une exception explicite si Supabase est indisponible (aucun mock en production)', () async {
       final service = TripService();
-      final trips = await service.searchTrips(
-        departure: 'Dakar',
-        destination: 'Thiès',
+      // Sans instance Supabase connectée, le service doit lever une exception explicite et non retourner de faux trajets
+      expect(
+        () async => await service.searchTrips(
+          departure: 'Dakar',
+          destination: 'Thiès',
+        ),
+        throwsA(isA<Exception>()),
       );
-
-      expect(trips.isNotEmpty, isTrue);
-      for (var trip in trips) {
-        expect(trip.departure.toLowerCase(), contains('dakar'));
-        expect(trip.arrival.toLowerCase(), contains('thies'));
-      }
-    });
-
-    test('searchTrips returns matching routes for Dakar to Touba', () async {
-      final service = TripService();
-      final trips = await service.searchTrips(
-        departure: 'Dakar',
-        destination: 'Touba',
-      );
-
-      expect(trips.isNotEmpty, isTrue);
-      for (var trip in trips) {
-        expect(trip.departure.toLowerCase(), contains('dakar'));
-        expect(trip.arrival.toLowerCase(), contains('touba'));
-      }
     });
   });
 
-  group('BookingService', () {
-    test('getOccupiedSeats returns non-empty list for trips', () async {
+  group('BookingService (Sécurisation des Réservations)', () {
+    test('lockSeatsBatch rejette les identifiants invalides non UUID', () async {
       final service = BookingService();
-      final seats = await service.getOccupiedSeats('t1');
-      expect(seats, isNotEmpty);
+      expect(
+        () async => await service.lockSeatsBatch(
+          tripId: 'invalid-id-not-uuid',
+          seatNumbers: ['B1', 'B2'],
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
     });
 
-    test('lockSeatsBatch locks seats and returns IDs', () async {
+    test('getOccupiedSeats retourne une liste vide sans planter si Supabase n est pas initialisé', () async {
       final service = BookingService();
-      final bookingIds = await service.lockSeatsBatch(
-        tripId: 't1',
-        seatNumbers: ['B1', 'B2'],
-      );
-      expect(bookingIds.length, 2);
+      final seats = await service.getOccupiedSeats('00000000-0000-0000-0000-000000000001');
+      expect(seats, isEmpty);
     });
   });
 }

@@ -84,24 +84,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
-  /// Simulation d'un paiement réussi instantané (Mode test / Démo hors-ligne uniquement)
-  void _simulateSuccessPayment() {
-    setState(() => _processing = true);
-    Future.delayed(const Duration(milliseconds: 200), () {
-      if (!mounted) return;
-      setState(() => _processing = false);
-      final gateway = PaymentConfigService.instance.getGateway(_selectedGatewayId);
-      final testRef = 'DEMO-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: const Color(0xFF059669),
-          content: Text('Démo : Paiement ${gateway?.name ?? "sécurisé"} simulé avec succès !'),
-        ),
-      );
-      _completePaymentWithSuccess(testRef);
-    });
-  }
-
   /// Vérifie si les réservations ont été marquées comme payées sur le serveur central
   Future<bool> _checkIfBookingsPaid() async {
     try {
@@ -110,7 +92,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           .where((id) => !id.startsWith('local_') && !id.startsWith('demo-'))
           .toList();
 
-      if (realIds.isEmpty) return true;
+      if (realIds.isEmpty) return false;
 
       final response = await client
           .from('bookings')
@@ -122,21 +104,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
       if (list.isEmpty) return false;
       return list.every((item) => item['status'] == 'paid');
     } catch (e) {
-      debugPrint('Vérification statut réservation: $e');
+      debugPrint('[PaymentScreen] Vérification statut réservation: $e');
       return false;
     }
   }
 
   /// Vérifie le paiement réel Wave auprès du serveur avant d'autoriser l'émission du billet
   void _verifyAndProcessWavePayment(BuildContext context) async {
-    final hasRealBookings = widget.bookingIds
-        .any((id) => !id.startsWith('local_') && !id.startsWith('demo-'));
-
-    if (!hasRealBookings) {
-      _simulateSuccessPayment();
-      return;
-    }
-
     setState(() => _processing = true);
 
     final isPaid = await _checkIfBookingsPaid();
@@ -149,7 +123,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Color(0xFF059669),
-          content: Text('Paiement Wave vérifié et validé par le serveur !'),
+          content: Text('Paiement vérifié et validé avec succès par le serveur !'),
         ),
       );
       final ref = 'WAVE-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
@@ -359,27 +333,21 @@ class _PaymentScreenState extends State<PaymentScreen> {
           children: [
             const Icon(Icons.verified_outlined, color: Color(0xFF1E3A8A)),
             const SizedBox(width: 8),
-            Text('Paiement $providerName'),
+            Text('Vérification $providerName'),
           ],
         ),
         content: Text(
-          'Valider le paiement de $_totalAmount FCFA via $providerName pour émettre instantanément votre billet numérique ?',
+          'Vérifier auprès du serveur la confirmation de votre paiement de $_totalAmount FCFA via $providerName pour émettre votre billet ?',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Fermer')),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              final hasRealBookings = widget.bookingIds
-                  .any((id) => !id.startsWith('local_') && !id.startsWith('demo-'));
-              if (!hasRealBookings) {
-                _simulateSuccessPayment();
-              } else {
-                _showPendingPaymentDialog(context);
-              }
+              _verifyAndProcessWavePayment(context);
             },
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF059669)),
-            child: const Text('Confirmer & Générer Billet', style: TextStyle(color: Colors.white)),
+            child: const Text('Vérifier Statut Réel', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -397,7 +365,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Colors.orange,
-          content: Text('Configuration Flutterwave non définie. Veuillez choisir Wave ou Espèces.'),
+          content: Text('Configuration Flutterwave non définie. Veuillez choisir Wave Sénégal.'),
         ),
       );
       return;
@@ -408,7 +376,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       final flutterwave = Flutterwave(
         publicKey: publicKey,
         currency: 'XOF',
-        txRef: 'dioufy_${widget.bookingIds.join('-')}_${DateTime.now().millisecondsSinceEpoch}',
+        txRef: 'dioufy_${widget.bookingIds.join(',')}_${DateTime.now().millisecondsSinceEpoch}',
         amount: '$_totalAmount',
         customer: Customer(
           name: widget.passengerName,
@@ -428,20 +396,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
       if (!context.mounted) return;
 
       if (response.status == 'successful' && response.transactionId != null) {
-        final hasRealBookings = widget.bookingIds
-            .any((id) => !id.startsWith('local_') && !id.startsWith('demo-'));
-        if (hasRealBookings) {
-          // Attente brève de propagation du webhook Flutterwave
-          await Future.delayed(const Duration(milliseconds: 1500));
-          final isPaid = await _checkIfBookingsPaid();
-          if (isPaid) {
-            _completePaymentWithSuccess(response.transactionId!);
-          } else {
-            if (!context.mounted) return;
-            _showPendingPaymentDialog(context);
-          }
-        } else {
+        // Attente de propagation du webhook Flutterwave
+        await Future.delayed(const Duration(milliseconds: 1500));
+        final isPaid = await _checkIfBookingsPaid();
+        if (!context.mounted) return;
+        if (isPaid) {
           _completePaymentWithSuccess(response.transactionId!);
+        } else {
+          _showPendingPaymentDialog(context);
         }
       } else {
         for (var id in widget.bookingIds) {
@@ -449,13 +411,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
         }
         if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Paiement annulé ou refusé')),
+          const SnackBar(content: Text('Paiement annulé ou refusé.')),
         );
       }
     } catch (e) {
-      debugPrint('Erreur Flutterwave: $e');
+      debugPrint('[PaymentScreen] Erreur Flutterwave: $e');
       if (context.mounted) {
-        _showTestValidationDialog(context, 'Flutterwave');
+        _showPendingPaymentDialog(context);
       }
     } finally {
       if (mounted) setState(() => _processing = false);

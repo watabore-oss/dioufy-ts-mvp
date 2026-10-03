@@ -278,7 +278,7 @@ class _DigitalDisplayWidgetState extends State<DigitalDisplayWidget> {
                                   text: TextSpan(
                                     style: const TextStyle(
                                       fontSize: 40,
-                                      height: 1.15,
+                                      height: 1.35,
                                       fontWeight: FontWeight.w900,
                                       color: Colors.white,
                                       letterSpacing: -0.8,

@@ -676,7 +676,7 @@ class _LandingScreenState extends State<LandingScreen> {
               color: const Color(0xFF0F172A),
               fontWeight: FontWeight.w900,
               letterSpacing: -0.5,
-              height: 1.25,
+              height: 1.35,
             ),
             children: const [
               TextSpan(text: 'Bienvenue sur\n'),

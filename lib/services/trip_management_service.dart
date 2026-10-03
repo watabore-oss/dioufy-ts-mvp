@@ -1,14 +1,15 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../features/search/trip.dart';
 
-/// Service de gestion et de mise à jour des trajets et prix (Super Admin)
+/// Service de gestion et de mise à jour des trajets et prix (Super Admin & GIE)
+/// SOURCE DE VÉRITÉ UNIQUE : Supabase table `trips`.
+/// Aucun identifiant factice 'trip-custom-...' ni mocks locaux en SharedPreferences.
 class TripManagementService extends ChangeNotifier {
-  static const String _storageKey = 'dioufy_managed_trips_v1';
   static TripManagementService? _instance;
 
   final List<Trip> _trips = [];
+  bool _isLoading = false;
 
   TripManagementService._();
 
@@ -18,110 +19,67 @@ class TripManagementService extends ChangeNotifier {
   }
 
   List<Trip> get trips => List.unmodifiable(_trips);
+  bool get isLoading => _isLoading;
 
+  /// Chargement initial des trajets réels depuis Supabase
   Future<void> initialize() async {
-    _trips.clear();
+    _isLoading = true;
+    notifyListeners();
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final rawJson = prefs.getString(_storageKey);
-      if (rawJson != null) {
-        final List<dynamic> list = jsonDecode(rawJson);
-        for (final item in list) {
-          _trips.add(Trip.fromMap(item as Map<String, dynamic>));
-        }
+      final client = Supabase.instance.client;
+      final res = await client
+          .from('trips')
+          .select('*, agencies(name)')
+          .order('depart_at', ascending: true);
+
+      final List list = res as List;
+      _trips.clear();
+      for (final item in list) {
+        _trips.add(Trip.fromMap(item as Map<String, dynamic>));
       }
     } catch (e) {
-      debugPrint('Erreur lecture des trajets personnalisés : $e');
+      debugPrint('[TripManagementService] Erreur lecture des trajets Supabase : $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-
-    // Si aucun trajet persisté, initialiser les trajets sénégalais de référence
-    if (_trips.isEmpty) {
-      _trips.addAll([
-        const Trip(
-          id: 't0000000-0000-0000-0000-000000000001',
-          time: '08:30',
-          type: 'CONFORT',
-          company: 'Dioufy Trans',
-          seatsLeft: 18,
-          price: 7500, // FCFA
-          departure: 'Dakar',
-          arrival: 'Thiès',
-          seatsCount: 36,
-        ),
-        const Trip(
-          id: 't0000000-0000-0000-0000-000000000002',
-          time: '10:15',
-          type: 'STANDARD',
-          company: 'Galsen Tour',
-          seatsLeft: 12,
-          price: 4500, // FCFA
-          departure: 'Dakar',
-          arrival: 'Thiès',
-          seatsCount: 36,
-        ),
-        const Trip(
-          id: 't0000000-0000-0000-0000-000000000003',
-          time: '07:00',
-          type: 'CONFORT',
-          company: 'Touba Express',
-          seatsLeft: 24,
-          price: 5000, // FCFA
-          departure: 'Dakar',
-          arrival: 'Touba',
-          seatsCount: 50,
-        ),
-        const Trip(
-          id: 't0000000-0000-0000-0000-000000000004',
-          time: '12:30',
-          type: 'VIP CLIMATISÉ',
-          company: 'Baol Trans',
-          seatsLeft: 15,
-          price: 6000, // FCFA
-          departure: 'Dakar',
-          arrival: 'Touba',
-          seatsCount: 40,
-        ),
-        const Trip(
-          id: 't0000000-0000-0000-0000-000000000005',
-          time: '06:30',
-          type: 'CONFORT',
-          company: 'Ndiolofène Voyages',
-          seatsLeft: 20,
-          price: 9000, // FCFA
-          departure: 'Dakar',
-          arrival: 'Saint-Louis',
-          seatsCount: 45,
-        ),
-      ]);
-    }
-    notifyListeners();
   }
 
-  /// Met à jour le prix en FCFA d'un trajet
+  /// Met à jour le prix en FCFA d'un trajet directement dans Supabase
   Future<void> updateTripPrice(String tripId, int newPriceFcfa) async {
-    final index = _trips.indexWhere((t) => t.id == tripId);
-    if (index == -1) return;
+    try {
+      final client = Supabase.instance.client;
+      await client
+          .from('trips')
+          .update({'price': newPriceFcfa})
+          .eq('id', tripId);
 
-    final old = _trips[index];
-    _trips[index] = Trip(
-      id: old.id,
-      time: old.time,
-      type: old.type,
-      company: old.company,
-      seatsLeft: old.seatsLeft,
-      price: newPriceFcfa,
-      departure: old.departure,
-      arrival: old.arrival,
-      seatsCount: old.seatsCount,
-      departureStation: old.departureStation,
-      arrivalStation: old.arrivalStation,
-      amenities: old.amenities,
-    );
-    notifyListeners();
-    await _persist();
+      final index = _trips.indexWhere((t) => t.id == tripId);
+      if (index != -1) {
+        final old = _trips[index];
+        _trips[index] = Trip(
+          id: old.id,
+          time: old.time,
+          type: old.type,
+          company: old.company,
+          seatsLeft: old.seatsLeft,
+          price: newPriceFcfa,
+          departure: old.departure,
+          arrival: old.arrival,
+          seatsCount: old.seatsCount,
+          departureStation: old.departureStation,
+          arrivalStation: old.arrivalStation,
+          amenities: old.amenities,
+        );
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('[TripManagementService] Erreur updateTripPrice Supabase : $e');
+      rethrow;
+    }
   }
 
-  /// Met à jour l'horaire et le type d'un trajet
+  /// Met à jour les détails d'un trajet dans Supabase
   Future<void> updateTripDetails({
     required String tripId,
     required String time,
@@ -129,29 +87,39 @@ class TripManagementService extends ChangeNotifier {
     required int price,
     required int seatsCount,
   }) async {
-    final index = _trips.indexWhere((t) => t.id == tripId);
-    if (index == -1) return;
+    try {
+      final client = Supabase.instance.client;
+      await client.from('trips').update({
+        'price': price,
+        'seats_count': seatsCount,
+      }).eq('id', tripId);
 
-    final old = _trips[index];
-    _trips[index] = Trip(
-      id: old.id,
-      time: time,
-      type: type,
-      company: old.company,
-      seatsLeft: seatsCount < old.seatsLeft ? seatsCount : old.seatsLeft,
-      price: price,
-      departure: old.departure,
-      arrival: old.arrival,
-      seatsCount: seatsCount,
-      departureStation: old.departureStation,
-      arrivalStation: old.arrivalStation,
-      amenities: old.amenities,
-    );
-    notifyListeners();
-    await _persist();
+      final index = _trips.indexWhere((t) => t.id == tripId);
+      if (index != -1) {
+        final old = _trips[index];
+        _trips[index] = Trip(
+          id: old.id,
+          time: time,
+          type: type,
+          company: old.company,
+          seatsLeft: seatsCount < old.seatsLeft ? seatsCount : old.seatsLeft,
+          price: price,
+          departure: old.departure,
+          arrival: old.arrival,
+          seatsCount: seatsCount,
+          departureStation: old.departureStation,
+          arrivalStation: old.arrivalStation,
+          amenities: old.amenities,
+        );
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('[TripManagementService] Erreur updateTripDetails Supabase : $e');
+      rethrow;
+    }
   }
 
-  /// Ajout d'un nouveau trajet par le Super Admin
+  /// Ajout d'un nouveau trajet réel dans Supabase
   Future<void> addTrip({
     required String departure,
     required String arrival,
@@ -160,37 +128,51 @@ class TripManagementService extends ChangeNotifier {
     required String type,
     required int price,
     required int seatsCount,
+    String? organizationId,
+    String? driverId,
+    String? vehicleId,
   }) async {
-    final newTrip = Trip(
-      id: 'trip-custom-${DateTime.now().millisecondsSinceEpoch}',
-      departure: departure,
-      arrival: arrival,
-      company: company,
-      time: time,
-      type: type,
-      price: price,
-      seatsCount: seatsCount,
-      seatsLeft: seatsCount,
-    );
-    _trips.insert(0, newTrip);
-    notifyListeners();
-    await _persist();
-  }
-
-  /// Suppression d'un trajet
-  Future<void> deleteTrip(String tripId) async {
-    _trips.removeWhere((t) => t.id == tripId);
-    notifyListeners();
-    await _persist();
-  }
-
-  Future<void> _persist() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final list = _trips.map((t) => t.toMap()).toList();
-      await prefs.setString(_storageKey, jsonEncode(list));
+      final client = Supabase.instance.client;
+      // Construction de la date de départ prévue
+      final now = DateTime.now();
+      final timeParts = time.split(':');
+      final hour = timeParts.isNotEmpty ? int.tryParse(timeParts[0]) ?? 8 : 8;
+      final minute = timeParts.length > 1 ? int.tryParse(timeParts[1]) ?? 0 : 0;
+      final departAt = DateTime(now.year, now.month, now.day, hour, minute);
+
+      final insertData = {
+        'from_loc': departure,
+        'to_loc': arrival,
+        'depart_at': departAt.toIso8601String(),
+        'price': price,
+        'seats_count': seatsCount,
+        'status': 'scheduled',
+        if (organizationId != null) 'organization_id': organizationId,
+        if (driverId != null) 'driver_id': driverId,
+        if (vehicleId != null) 'vehicle_id': vehicleId,
+      };
+
+      final res = await client.from('trips').insert(insertData).select().single();
+      final createdTrip = Trip.fromMap(res);
+      _trips.insert(0, createdTrip);
+      notifyListeners();
     } catch (e) {
-      debugPrint('Erreur persistance des trajets : $e');
+      debugPrint('[TripManagementService] Erreur addTrip Supabase : $e');
+      rethrow;
+    }
+  }
+
+  /// Suppression d'un trajet dans Supabase
+  Future<void> deleteTrip(String tripId) async {
+    try {
+      final client = Supabase.instance.client;
+      await client.from('trips').delete().eq('id', tripId);
+      _trips.removeWhere((t) => t.id == tripId);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[TripManagementService] Erreur deleteTrip Supabase : $e');
+      rethrow;
     }
   }
 }

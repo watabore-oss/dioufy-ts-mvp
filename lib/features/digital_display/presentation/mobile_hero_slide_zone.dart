@@ -276,7 +276,7 @@ class _MobileHeroSlideZoneState extends State<MobileHeroSlideZone> {
                         color: Colors.white,
                         fontWeight: FontWeight.w900,
                         letterSpacing: -0.5,
-                        height: 1.25,
+                        height: 1.35,
                         shadows: [
                           Shadow(color: Colors.black87, blurRadius: 6, offset: Offset(0, 1.5)),
                         ],

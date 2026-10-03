@@ -1,10 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'ticket_service.dart';
 
 /// Rapport officiel d'indicateurs de performance (KPIs) de la plateforme Dioufy-TS
+/// SOURCE DE VÉRITÉ UNIQUE : Supabase PostgreSQL.
+/// Aucun montant forfaitaire, aucune estimation artificielle ni faux chiffre d'exploitation.
 class PlatformKpiReport {
-  /// Chiffre d'Affaires Réellement Encaissé en FCFA (transactions au statut completed/paid)
+  /// Chiffre d'Affaires Réellement Encaissé en FCFA (transactions au statut successful)
   final int totalRevenueCollected;
 
   /// Nombre total de billets vendus et encaissés
@@ -16,7 +17,7 @@ class PlatformKpiReport {
   /// Taux d'utilisation des billets = (billets utilisés / billets vendus) * 100
   final double ticketUsageRate;
 
-  /// Nombre de trajets programmés à la date du jour avec statut actif
+  /// Nombre de départs programmés ou actifs
   final int activeTripsToday;
 
   /// Répartition du chiffre d'affaires par passerelle de paiement
@@ -41,7 +42,7 @@ class KpiService {
   KpiService._();
   static final KpiService instance = KpiService._();
 
-  /// Récupère les KPIs réels depuis le backend Supabase / PostgreSQL avec agrégations strictes
+  /// Récupère les KPIs réels depuis le backend Supabase avec agrégations strictes
   Future<PlatformKpiReport> fetchPlatformKpis() async {
     int totalRevenue = 0;
     int soldCount = 0;
@@ -49,6 +50,7 @@ class KpiService {
     int activeTrips = 0;
     final Map<String, int> gatewayBreakdown = {
       'wave': 0,
+      'flutterwave': 0,
       'orange_money': 0,
       'free_money': 0,
       'cash': 0,
@@ -57,12 +59,11 @@ class KpiService {
     try {
       final client = Supabase.instance.client;
 
-      // 1. Récupération des transactions réellement encaissées
-      // La table souveraine des règlements est `payments` (amount, provider, status)
+      // 1. Récupération des transactions réellement encaissées dans `payments`
       try {
         final paymentsResponse = await client
             .from('payments')
-            .select('id, amount, provider, status, created_at')
+            .select('id, amount, provider, status')
             .eq('status', 'successful')
             .limit(1000);
 
@@ -79,40 +80,31 @@ class KpiService {
               gatewayBreakdown[method] = amount;
             }
           }
-        } else {
-          // Si payments est vide ou en cours d'initialisation, interroger les réservations (bookings)
-          final bookingsResponse = await client
-              .from('bookings')
-              .select('id, status, seats, created_at')
-              .eq('status', 'paid')
-              .limit(1000);
-
-          if (bookingsResponse.isNotEmpty) {
-            for (final _ in bookingsResponse) {
-              soldCount++;
-              // Estimation standard par défaut si pas de table payments
-              totalRevenue += 5000;
-              gatewayBreakdown['wave'] = (gatewayBreakdown['wave'] ?? 0) + 5000;
-            }
-          }
         }
       } catch (err) {
-        debugPrint('[KpiService] Consultation payments/bookings : $err');
+        debugPrint('[KpiService] Consultation payments : $err');
       }
 
-      // 2. Récupération des billets émis
+      // 2. Récupération des billets émis et compostés
       try {
         final ticketsResponse = await client
             .from('tickets')
-            .select('id, issued_at')
+            .select('id, composted_at, issued_at')
             .limit(1000);
 
-        usedCount = ticketsResponse.length;
+        for (final t in ticketsResponse) {
+          if (t['composted_at'] != null) {
+            usedCount++;
+          }
+        }
+        if (soldCount == 0 && ticketsResponse.isNotEmpty) {
+          soldCount = ticketsResponse.length;
+        }
       } catch (err) {
         debugPrint('[KpiService] Consultation tickets : $err');
       }
 
-      // 3. Récupération des départs actifs du jour
+      // 3. Récupération des départs actifs réels
       try {
         final tripsResponse = await client
             .from('trips')
@@ -123,37 +115,17 @@ class KpiService {
       } catch (err) {
         debugPrint('[KpiService] Consultation trips : $err');
       }
-
-      // Si aucune donnée serveur n'est présente (mode hors-ligne ou initialisation), repli local
-      if (soldCount == 0) {
-        final localTickets = await TicketService.getLocalTickets();
-        for (final t in localTickets) {
-          final amt = (t['amount'] as num?)?.toInt() ?? 0;
-          final status = t['status']?.toString() ?? 'confirmed';
-          if (status != 'cancelled' && status != 'refunded') {
-            totalRevenue += amt;
-            soldCount++;
-            if (status == 'used') {
-              usedCount++;
-            }
-            final gw = (t['gateway']?.toString() ?? 'wave').toLowerCase();
-            gatewayBreakdown[gw] = (gatewayBreakdown[gw] ?? 0) + amt;
-          }
-        }
-        activeTrips = (soldCount > 0) ? (soldCount / 14).ceil() : 3;
-      }
     } catch (e) {
-      debugPrint('[KpiService] Exception globale fetchPlatformKpis : $e');
+      debugPrint('[KpiService] Exception fetchPlatformKpis : $e');
     }
 
-    // Calcul du taux d'utilisation mathématiquement précis
     final double usageRate = soldCount > 0 ? (usedCount / soldCount) * 100 : 0.0;
 
     return PlatformKpiReport(
       totalRevenueCollected: totalRevenue,
       totalTicketsSold: soldCount,
       totalTicketsUsed: usedCount,
-      ticketUsageRate: double.parse(usageRate.toStringAsFixed(1)),
+      ticketUsageRate: usageRate,
       activeTripsToday: activeTrips,
       revenueByGateway: gatewayBreakdown,
       generatedAt: DateTime.now(),

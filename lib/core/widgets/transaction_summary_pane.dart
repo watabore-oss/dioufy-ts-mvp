@@ -423,7 +423,7 @@ class TransactionSummaryPane extends StatelessWidget {
                   fontFamily: DioufyTypography.fontFamily,
                   color: Colors.white60,
                   fontSize: 12,
-                  height: 1.3,
+                  height: 1.4,
                 ),
               ),
             ],

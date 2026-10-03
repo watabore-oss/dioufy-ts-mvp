@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/auth_service.dart';
 import '../../services/scanner/scanner_service.dart';
 import 'cloture_caisse_screen.dart';
 import 'qr_camera_scanner_screen.dart';
@@ -12,17 +13,120 @@ class ChauffeurScreen extends StatefulWidget {
 }
 
 class _ChauffeurScreenState extends State<ChauffeurScreen> {
-  int _scannedCount = 32;
-  final int _totalCapacity = 45;
+  int _scannedCount = 0;
+  int _totalCapacity = 36;
+  String _routeLine = "Chargement...";
+  String _busMatricule = "EN ATTENTE";
+  String? _currentTripId;
+  bool _isLoadingTrip = true;
   final List<Map<String, dynamic>> _validationHistory = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDriverAssignedTrip();
+  }
+
+  /// Chargement du trajet réel assigné au chauffeur connecté depuis Supabase
+  Future<void> _loadDriverAssignedTrip() async {
+    setState(() => _isLoadingTrip = true);
+    try {
+      final client = Supabase.instance.client;
+      final currentUserId = AuthService.instance.currentUser.id;
+
+      // 1. Rechercher les trajets actifs assignés à ce chauffeur
+      var filterQuery = client
+          .from('trips')
+          .select('id, from_loc, to_loc, seats_count, status, vehicles(plate_number, capacity), seats(id, status)');
+
+      if (currentUserId.isNotEmpty && !currentUserId.startsWith('guest_')) {
+        filterQuery = filterQuery.eq('driver_id', currentUserId);
+      }
+
+      final tripsRes = await filterQuery.order('depart_at', ascending: false).limit(1);
+
+      if (tripsRes.isNotEmpty) {
+        final trip = tripsRes.first;
+        final tId = trip['id']?.toString();
+        final from = trip['from_loc']?.toString() ?? 'Départ';
+        final to = trip['to_loc']?.toString() ?? 'Arrivée';
+        final vMap = trip['vehicles'] as Map?;
+        final plate = vMap?['plate_number']?.toString() ?? 'AFFECTATION EN COURS';
+        final cap = (vMap?['capacity'] as num?)?.toInt() ?? (trip['seats_count'] as num?)?.toInt() ?? 36;
+
+        // Calculer les passagers déjà à bord (sièges sold/occupied)
+        int boarded = 0;
+        if (trip['seats'] is List) {
+          final sList = trip['seats'] as List;
+          boarded = sList.where((s) => s['status'] == 'sold' || s['status'] == 'occupied').length;
+        }
+
+        if (mounted) {
+          setState(() {
+            _currentTripId = tId;
+            _routeLine = '$from → $to';
+            _busMatricule = plate;
+            _totalCapacity = cap;
+            _scannedCount = boarded;
+            _isLoadingTrip = false;
+          });
+          return;
+        }
+      } else {
+        // Si aucun trajet affecté directement, chercher le dernier départ en cours de la gare
+        final generalRes = await client
+            .from('trips')
+            .select('id, from_loc, to_loc, seats_count, vehicles(plate_number, capacity), seats(id, status)')
+            .order('depart_at', ascending: false)
+            .limit(1);
+
+        if (generalRes.isNotEmpty) {
+          final trip = generalRes.first;
+          final tId = trip['id']?.toString();
+          final from = trip['from_loc']?.toString() ?? 'Dakar';
+          final to = trip['to_loc']?.toString() ?? 'Touba';
+          final vMap = trip['vehicles'] as Map?;
+          final plate = vMap?['plate_number']?.toString() ?? 'DK-LIGNE-SN';
+          final cap = (vMap?['capacity'] as num?)?.toInt() ?? (trip['seats_count'] as num?)?.toInt() ?? 36;
+
+          int boarded = 0;
+          if (trip['seats'] is List) {
+            final sList = trip['seats'] as List;
+            boarded = sList.where((s) => s['status'] == 'sold' || s['status'] == 'occupied').length;
+          }
+
+          if (mounted) {
+            setState(() {
+              _currentTripId = tId;
+              _routeLine = '$from → $to';
+              _busMatricule = plate;
+              _totalCapacity = cap;
+              _scannedCount = boarded;
+              _isLoadingTrip = false;
+            });
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[ChauffeurScreen] Erreur chargement trajet assigné: $e');
+    }
+
+    if (mounted) {
+      setState(() {
+        _routeLine = "Aucun départ actif";
+        _busMatricule = "NON ASSIGNÉ";
+        _totalCapacity = 36;
+        _scannedCount = 0;
+        _isLoadingTrip = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return PopScope(
       canPop: true,
-      onPopInvokedWithResult: (didPop, result) {
-        // Retour prédictif natif vers HomeScreen
-      },
       child: Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
         appBar: AppBar(
@@ -50,6 +154,11 @@ class _ChauffeurScreenState extends State<ChauffeurScreen> {
           surfaceTintColor: Colors.transparent,
           shape: const Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1.2)),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh, color: Color(0xFF0F172A)),
+              tooltip: 'Actualiser',
+              onPressed: _loadDriverAssignedTrip,
+            ),
             Container(
               margin: const EdgeInsets.only(right: 14, top: 10, bottom: 10),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -58,16 +167,18 @@ class _ChauffeurScreenState extends State<ChauffeurScreen> {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: const Color(0xFFFDE68A), width: 1.2),
               ),
-              child: const Center(
+              child: Center(
                 child: Text(
-                  'BUS: DK-882-SN',
-                  style: TextStyle(color: Color(0xFFB45309), fontWeight: FontWeight.bold, fontSize: 12.5),
+                  'BUS: $_busMatricule',
+                  style: const TextStyle(color: Color(0xFFB45309), fontWeight: FontWeight.bold, fontSize: 12.5),
                 ),
               ),
             ),
           ],
         ),
-        body: SafeArea(
+        body: _isLoadingTrip
+            ? const Center(child: CircularProgressIndicator(color: Color(0xFF1E3A8A)))
+            : SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -104,7 +215,7 @@ class _ChauffeurScreenState extends State<ChauffeurScreen> {
                           Expanded(
                             child: _stat(
                               'Ligne en cours',
-                              'Dakar → Touba',
+                              _routeLine,
                               const Color(0xFF1D4ED8),
                               Icons.route,
                               isTextSmall: true,
@@ -126,7 +237,9 @@ class _ChauffeurScreenState extends State<ChauffeurScreen> {
                             const Icon(Icons.volume_up, color: Color(0xFFB45309), size: 18),
                             const SizedBox(width: 8),
                             Text(
-                              'Il reste ${_totalCapacity - _scannedCount} passagers attendus avant départ',
+                              _totalCapacity > _scannedCount
+                                  ? 'Il reste ${_totalCapacity - _scannedCount} passagers attendus avant départ'
+                                  : 'Capacité atteinte (Complet)',
                               style: const TextStyle(color: Color(0xFF92400E), fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                           ],
@@ -179,8 +292,9 @@ class _ChauffeurScreenState extends State<ChauffeurScreen> {
                     MaterialPageRoute(
                       builder: (_) => ClotureCaisseScreen(
                         totalPassengers: _scannedCount,
-                        busId: 'DK-882-SN',
-                        route: 'Dakar → Touba',
+                        busId: _busMatricule,
+                        route: _routeLine,
+                        tripId: _currentTripId,
                       ),
                     ),
                   );

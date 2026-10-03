@@ -396,6 +396,10 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
                           'p_amount': dep.price,
                         });
 
+                        if (res is Map && res['success'] == false) {
+                          throw Exception(res['message'] ?? 'Erreur lors de la vente du billet');
+                        }
+
                         if (!ctx.mounted) return;
                         Navigator.pop(ctx);
                         _fetchDeparturesFromSupabase();
@@ -410,17 +414,11 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
                         }
                       } catch (e) {
                         setDialogState(() => isSelling = false);
-                        // Fallback applicatif propre si la RPC est en attente
-                        if (!ctx.mounted) return;
-                        Navigator.pop(ctx);
-                        setState(() {
-                          dep.boardedSeats++;
-                        });
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
                             SnackBar(
-                              content: Text('Billet émis pour ${nameCtrl.text.trim()} (Siège ${seatCtrl.text.trim().toUpperCase()}) - ${dep.price} FCFA encaissés.'),
-                              backgroundColor: const Color(0xFF059669),
+                              content: Text('Échec de la vente : $e'),
+                              backgroundColor: Colors.red.shade700,
                             ),
                           );
                         }
