@@ -1,5 +1,4 @@
-﻿import 'package:flutter_test/flutter_test.dart';
-import 'package:dioufy_ts_mvp/services/scanner/camera_adapter.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:dioufy_ts_mvp/services/scanner/scan_session.dart';
 import 'package:dioufy_ts_mvp/services/scanner/scan_stabilizer.dart';
 import 'package:dioufy_ts_mvp/services/scanner/ticket_verifier.dart';

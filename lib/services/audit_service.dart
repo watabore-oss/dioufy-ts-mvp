@@ -105,9 +105,7 @@ class AuditService {
           .order('timestamp', ascending: false)
           .limit(limit);
 
-      if (res is List) {
-        return res.map((item) => AuditEntry.fromMap(item as Map<String, dynamic>)).toList();
-      }
+      return res.map((item) => AuditEntry.fromMap(item)).toList();
     } catch (e) {
       debugPrint('[AuditLog] Lecture distante indisponible, affichage buffer local : $e');
     }

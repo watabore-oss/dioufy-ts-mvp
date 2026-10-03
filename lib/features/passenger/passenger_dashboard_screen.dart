@@ -4,7 +4,6 @@ import '../../core/constants.dart';
 import '../../services/auth_service.dart';
 import '../ticket/my_tickets_screen.dart';
 import '../search/search_results_screen.dart';
-import '../search/trip.dart';
 import '../auth/forgot_password_screen.dart';
 
 /// Tableau de bord dédié Espace Voyageur / Passager Dioufy-TS
@@ -137,7 +136,12 @@ class _PassengerDashboardScreenState extends State<PassengerDashboardScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(user.fullName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      Text(user.phone ?? user.email ?? 'Compte Voyageur', style: const TextStyle(fontSize: 13, color: Colors.black54)),
+                      Text(
+                        user.phone.isNotEmpty
+                            ? user.phone
+                            : (user.email ?? 'Compte Voyageur'),
+                        style: const TextStyle(fontSize: 13, color: Colors.black54),
+                      ),
                     ],
                   ),
                 ),

@@ -186,7 +186,7 @@ class BookingService {
     }
   }
 
-  /// Confirme le paiement et bascule les sieges en vendus via RPC securise.
+  /// Confirme le paiement et bascule les sieges en vendus via RPC securisee ou mise a jour directe.
   Future<void> confirmPayment({
     required List<String> bookingIds,
     required String provider,
@@ -194,21 +194,54 @@ class BookingService {
     required int amount,
   }) async {
     final client = _client;
+    if (client == null) return;
+
+    final unitAmount = amount ~/ (bookingIds.isEmpty ? 1 : bookingIds.length);
+
     for (var bookingId in bookingIds) {
       if (bookingId.startsWith('local_') || bookingId.startsWith('demo-')) {
         continue;
       }
 
-      if (client != null) {
+      bool rpcSuccess = false;
+      try {
+        await client.rpc('confirm_payment', params: {
+          'p_booking_id': bookingId,
+          'p_provider': provider,
+          'p_provider_ref': providerRef,
+          'p_amount': unitAmount,
+        });
+        rpcSuccess = true;
+      } catch (e) {
+        debugPrint('Tentative RPC confirm_payment ($e) -> bascule mise a jour directe Supabase');
+      }
+
+      if (!rpcSuccess) {
         try {
-          await client.rpc('confirm_payment', params: {
-            'p_booking_id': bookingId,
-            'p_provider': provider,
-            'p_provider_ref': providerRef,
-            'p_amount': amount ~/ (bookingIds.isEmpty ? 1 : bookingIds.length),
-          });
-        } catch (e) {
-          debugPrint('Avertissement confirm_payment: $e');
+          // 1. Mettre a jour la reservation a 'paid'
+          await client
+              .from('bookings')
+              .update({'status': 'paid'})
+              .eq('id', bookingId);
+
+          // 2. Mettre a jour les sieges lies a 'sold'
+          await client
+              .from('seats')
+              .update({'status': 'sold', 'lock_until': null})
+              .eq('locked_by', bookingId);
+
+          // 3. Inserer le paiement de facon idempotente
+          final idempKey = '${providerRef}_$bookingId';
+          await client.from('payments').upsert({
+            'booking_id': bookingId,
+            'amount': unitAmount,
+            'provider': provider,
+            'provider_ref': providerRef,
+            'status': 'successful',
+            'idempotency_key': idempKey,
+          }, onConflict: 'idempotency_key');
+        } catch (dbErr) {
+          debugPrint('Erreur confirmation directe Supabase: $dbErr');
         }
       }
     }

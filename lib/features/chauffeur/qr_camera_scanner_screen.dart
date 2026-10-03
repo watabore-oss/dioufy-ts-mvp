@@ -29,7 +29,6 @@ class _QrCameraScannerScreenState extends State<QrCameraScannerScreen>
   late final Animation<double> _laserAnimation;
 
   final ImagePicker _picker = ImagePicker();
-  ScanResult? _lastScanResult;
   bool _isDisposed = false;
   bool _isSheetOpen = false;
   bool _isAnalyzingImage = false;
@@ -99,7 +98,6 @@ class _QrCameraScannerScreenState extends State<QrCameraScannerScreen>
 
     final result = await ScannerService.instance.onFrameDetected(rawCode);
     if (result != null && mounted) {
-      setState(() => _lastScanResult = result);
       _showTicketResultSheet(result);
     } else {
       // Reprise si code non stabilisé
@@ -138,7 +136,6 @@ class _QrCameraScannerScreenState extends State<QrCameraScannerScreen>
         if (mounted) {
           setState(() {
             _isAnalyzingImage = false;
-            _lastScanResult = result;
           });
           _showTicketResultSheet(result);
           return;
@@ -189,7 +186,6 @@ class _QrCameraScannerScreenState extends State<QrCameraScannerScreen>
         if (mounted) {
           setState(() {
             _isAnalyzingImage = false;
-            _lastScanResult = result;
           });
           _showTicketResultSheet(result);
           return;
@@ -576,7 +572,6 @@ class _QrCameraScannerScreenState extends State<QrCameraScannerScreen>
               if (val.isNotEmpty) {
                 final result = await ScannerService.instance.validateDirectCode(val);
                 if (mounted) {
-                  setState(() => _lastScanResult = result);
                   _showTicketResultSheet(result);
                 }
               }
@@ -663,7 +658,7 @@ class _QrCameraScannerScreenState extends State<QrCameraScannerScreen>
                 )
               else if (_cameraController is NativeQrCameraController)
                 MobileScanner(
-                  controller: (_cameraController as NativeQrCameraController).mobileScannerController,
+                  controller: _cameraController.mobileScannerController,
                   fit: BoxFit.cover,
                 ),
 
@@ -677,7 +672,7 @@ class _QrCameraScannerScreenState extends State<QrCameraScannerScreen>
                   bottom: false,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    color: const Color(0xFF0F172A).withOpacity(0.85),
+                    color: const Color(0xFF0F172A).withValues(alpha: 0.85),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -686,15 +681,23 @@ class _QrCameraScannerScreenState extends State<QrCameraScannerScreen>
                             Container(
                               width: 10,
                               height: 10,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF10B981),
+                              decoration: BoxDecoration(
+                                color: _cameraErrorMessage != null
+                                    ? const Color(0xFFEF4444)
+                                    : const Color(0xFF10B981),
                                 shape: BoxShape.circle,
                               ),
                             ),
                             const SizedBox(width: 8),
-                            const Text(
-                              "VISION OPTIQUE ACTIVE",
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                            Text(
+                              _cameraErrorMessage ?? "VISION OPTIQUE ACTIVE",
+                              style: TextStyle(
+                                color: _cameraErrorMessage != null
+                                    ? const Color(0xFFFCA5A5)
+                                    : Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
                             ),
                           ],
                         ),

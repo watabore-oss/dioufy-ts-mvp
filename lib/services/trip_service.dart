@@ -127,7 +127,7 @@ class TripService {
 
     if (_client != null) {
       try {
-        final response = await _client!
+        final response = await _client
             .from('trips')
             .select('*, agencies(name), seats(id, status, lock_until)')
             .ilike('from_loc', '%$cleanDep%')

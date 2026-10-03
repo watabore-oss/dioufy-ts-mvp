@@ -5,7 +5,6 @@ import '../auth/login_screen.dart';
 import '../auth/register_screen.dart';
 import '../digital_display/presentation/digital_display_widget.dart';
 import '../digital_display/presentation/mobile_hero_slide_zone.dart';
-import '../digital_display/presentation/mobile_promo_card.dart';
 import '../search/search_results_screen.dart';
 
 /// Écran d'accueil et de réservation Dioufy-TS adaptatif Desktop & Mobile.

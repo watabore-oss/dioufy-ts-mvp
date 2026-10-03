@@ -31,12 +31,12 @@ class _PassengerFormScreenState extends State<PassengerFormScreen> {
   void initState() {
     super.initState();
     final user = AuthService.instance.currentUser;
-    final initialName = (user != null && !user.fullName.startsWith('Voyageur 221') && !user.fullName.startsWith('Voyageur +221'))
+    final initialName = (!user.fullName.startsWith('Voyageur 221') && !user.fullName.startsWith('Voyageur +221'))
         ? user.fullName
         : '';
     _nameController = TextEditingController(text: initialName);
-    _phoneController = TextEditingController(text: user?.phone ?? '');
-    _emailController = TextEditingController(text: user?.email ?? '');
+    _phoneController = TextEditingController(text: user.phone);
+    _emailController = TextEditingController(text: user.email ?? '');
   }
 
   int get _totalPrice => widget.trip.price * widget.selectedSeats.length;

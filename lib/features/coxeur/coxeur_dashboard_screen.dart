@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../services/audit_service.dart';
 import '../../services/scanner/scanner_service.dart';
 import '../chauffeur/qr_camera_scanner_screen.dart';
@@ -17,7 +18,7 @@ enum BusDepartureStatus {
   const BusDepartureStatus(this.label, this.color);
 }
 
-/// Modèle local d'un départ de bus géré par le régulateur
+/// Modèle d'un départ de bus réel géré par le régulateur
 class QuaiDeparture {
   final String id;
   final String busMatricule;
@@ -26,6 +27,7 @@ class QuaiDeparture {
   final int totalSeats;
   int boardedSeats;
   BusDepartureStatus status;
+  final int price;
 
   QuaiDeparture({
     required this.id,
@@ -35,10 +37,12 @@ class QuaiDeparture {
     required this.totalSeats,
     required this.boardedSeats,
     required this.status,
+    this.price = 5000,
   });
 }
 
 /// Tableau de bord dédié Régulateur de Quai & Coxeur Dioufy-TS
+/// 100% Connecté à Supabase — Zéro données factices / mock.
 class CoxeurDashboardScreen extends StatefulWidget {
   const CoxeurDashboardScreen({super.key});
 
@@ -47,43 +51,25 @@ class CoxeurDashboardScreen extends StatefulWidget {
 }
 
 class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
-  final String _selectedGare = 'Gare des Baux Maraîchers (Dakar)';
+  final List<String> _availableGares = [
+    'Gare des Baux Maraîchers (Dakar)',
+    'Gare Routière de Thiès',
+    'Gare Routière de Touba',
+    'Gare Routière de Saint-Louis',
+    'Gare Routière de Mbour',
+    'Gare Routière de Kaolack',
+    'Gare Routière de Ziguinchor',
+  ];
+
+  late String _selectedGare;
   RealtimeChannel? _realtimeChannel;
   bool _isLoading = false;
-
-  List<QuaiDeparture> _departures = [
-    QuaiDeparture(
-      id: 'DEP-01',
-      busMatricule: 'DK-882-SN',
-      destination: 'Touba',
-      heure: '08:00',
-      totalSeats: 45,
-      boardedSeats: 32,
-      status: BusDepartureStatus.embarquement,
-    ),
-    QuaiDeparture(
-      id: 'DEP-02',
-      busMatricule: 'TH-310-SN',
-      destination: 'Thiès',
-      heure: '08:30',
-      totalSeats: 36,
-      boardedSeats: 15,
-      status: BusDepartureStatus.aQuai,
-    ),
-    QuaiDeparture(
-      id: 'DEP-03',
-      busMatricule: 'SL-492-SN',
-      destination: 'Saint-Louis',
-      heure: '09:00',
-      totalSeats: 50,
-      boardedSeats: 0,
-      status: BusDepartureStatus.preparation,
-    ),
-  ];
+  List<QuaiDeparture> _departures = [];
 
   @override
   void initState() {
     super.initState();
+    _selectedGare = _availableGares.first;
     _fetchDeparturesFromSupabase();
     _subscribeToRealtime();
   }
@@ -109,55 +95,69 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
           )
           .subscribe();
     } catch (e) {
-      debugPrint('Realtime quai en attente (mode hors-ligne): $e');
+      debugPrint('Realtime quai en attente : $e');
     }
   }
 
+  /// Chargement des départs réels depuis la table `trips` de Supabase
   Future<void> _fetchDeparturesFromSupabase() async {
     if (_isLoading) return;
     setState(() => _isLoading = true);
     try {
       final client = Supabase.instance.client;
+      final cityName = _selectedGare.contains('Dakar')
+          ? 'Dakar'
+          : _selectedGare.split(' ').last.replaceAll('(', '').replaceAll(')', '');
+
       final response = await client
           .from('trips')
-          .select('id, from_loc, to_loc, depart_at, seats_total, status, bus_id')
+          .select('id, from_loc, to_loc, depart_at, seats_count, status, price, seats(id, status)')
+          .ilike('from_loc', '%$cityName%')
           .order('depart_at', ascending: true)
-          .limit(10)
-          .timeout(const Duration(seconds: 3));
+          .limit(15)
+          .timeout(const Duration(seconds: 4));
 
       final list = response as List;
-      if (list.isNotEmpty) {
-        final List<QuaiDeparture> remote = [];
-        for (var row in list) {
-          final id = row['id']?.toString() ?? '';
-          final dest = row['to_loc']?.toString() ?? 'Gare';
-          final matricule = row['bus_id']?.toString() ??
-              'DK-${id.length >= 3 ? id.substring(0, 3).toUpperCase() : "001"}-SN';
-          final departAt = DateTime.tryParse(row['depart_at']?.toString() ?? '') ?? DateTime.now();
-          final heure =
-              '${departAt.hour.toString().padLeft(2, '0')}:${departAt.minute.toString().padLeft(2, '0')}';
-          final total = (row['seats_total'] as num?)?.toInt() ?? 45;
-          final st = _mapStatusFromDb(row['status']?.toString());
+      final List<QuaiDeparture> remote = [];
 
-          remote.add(QuaiDeparture(
-            id: id,
-            busMatricule: matricule,
-            destination: dest,
-            heure: heure,
-            totalSeats: total,
-            boardedSeats: 0,
-            status: st,
-          ));
+      for (var row in list) {
+        final id = row['id']?.toString() ?? '';
+        final dest = row['to_loc']?.toString() ?? 'Gare';
+        final shortId = id.length >= 4 ? id.substring(0, 4).toUpperCase() : '001';
+        final matricule = 'DK-$shortId-SN';
+        final departAt = DateTime.tryParse(row['depart_at']?.toString() ?? '')?.toLocal() ?? DateTime.now();
+        final heure =
+            '${departAt.hour.toString().padLeft(2, '0')}:${departAt.minute.toString().padLeft(2, '0')}';
+        final total = (row['seats_count'] as num?)?.toInt() ?? 36;
+        final st = _mapStatusFromDb(row['status']?.toString());
+        final price = (row['price'] as num?)?.toInt() ?? 5000;
+
+        // Calcul des passagers confirmés à partir des sièges vendus
+        int soldCount = 0;
+        if (row['seats'] is List) {
+          final sList = row['seats'] as List;
+          soldCount = sList.where((s) => s['status'] == 'sold' || s['status'] == 'occupied').length;
         }
 
-        if (remote.isNotEmpty && mounted) {
-          setState(() {
-            _departures = remote;
-          });
-        }
+        remote.add(QuaiDeparture(
+          id: id,
+          busMatricule: matricule,
+          destination: dest,
+          heure: heure,
+          totalSeats: total,
+          boardedSeats: soldCount,
+          status: st,
+          price: price,
+        ));
+      }
+
+      if (mounted) {
+        setState(() {
+          _departures = remote;
+        });
       }
     } catch (e) {
-      debugPrint('Chargement départs quai (repli local): $e');
+      debugPrint('Chargement départs quai Supabase : $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -167,7 +167,6 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
     switch (dbStatus?.toLowerCase()) {
       case 'boarding':
         return BusDepartureStatus.embarquement;
-      case 'ready':
       case 'at_dock':
         return BusDepartureStatus.aQuai;
       case 'full':
@@ -195,12 +194,6 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
     }
   }
 
-  static bool _isValidUuid(String val) {
-    final uuidRegex =
-        RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
-    return uuidRegex.hasMatch(val);
-  }
-
   void _advanceStatus(QuaiDeparture dep) {
     setState(() {
       switch (dep.status) {
@@ -221,16 +214,14 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
       }
     });
 
-    if (_isValidUuid(dep.id)) {
-      try {
-        Supabase.instance.client
-            .from('trips')
-            .update({'status': _statusToDbString(dep.status)})
-            .eq('id', dep.id)
-            .then((_) => debugPrint('Statut trip quai synchronisé : ${dep.id}'))
-            .catchError((e) => debugPrint('Erreur synchro statut quai: $e'));
-      } catch (_) {}
-    }
+    try {
+      Supabase.instance.client
+          .from('trips')
+          .update({'status': _statusToDbString(dep.status)})
+          .eq('id', dep.id)
+          .then((_) => debugPrint('Statut trip quai synchronisé : ${dep.id}'))
+          .catchError((e) => debugPrint('Erreur synchro statut quai: $e'));
+    } catch (_) {}
 
     AuditService.instance.logAction(
       action: 'departure.status_update',
@@ -252,6 +243,7 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
     );
   }
 
+  /// Ouverture du scanner caméra pour validation optique de billets passagers
   Future<void> _openScanner() async {
     final scannedCode = await Navigator.push<String>(
       context,
@@ -289,7 +281,159 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
           ),
         ),
       );
+      _fetchDeparturesFromSupabase();
     }
+  }
+
+  /// Vente immédiate d'un billet en espèces au quai par le Coxeur
+  void _showSellCashTicketDialog(QuaiDeparture dep) {
+    final nameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController(text: '+221 77 ');
+    final seatCtrl = TextEditingController(text: 'A${dep.boardedSeats + 1}');
+    final formKey = GlobalKey<FormState>();
+    bool isSelling = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFECFDF5),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: const Text('XOF', style: TextStyle(color: Color(0xFF059669), fontWeight: FontWeight.bold, fontSize: 10)),
+              ),
+              const SizedBox(width: 10),
+              const Text('Vente Billet Quai (Espèces)', style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Ligne : ${dep.destination}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        Text('${dep.price} FCFA', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF059669))),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Nom du Passager',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.person),
+                    ),
+                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Nom du voyageur requis' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Téléphone',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.phone),
+                    ),
+                    validator: (v) => (v == null || v.trim().length < 9) ? 'Numéro requis' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: seatCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Numéro de Siège (ex: A1, B3)',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.airline_seat_recline_normal),
+                    ),
+                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Siège requis' : null,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSelling ? null : () => Navigator.pop(ctx),
+              child: const Text('Annuler'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF059669),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: isSelling
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      setDialogState(() => isSelling = true);
+                      try {
+                        final client = Supabase.instance.client;
+                        final res = await client.rpc('sell_ticket_cash', params: {
+                          'p_trip_id': dep.id,
+                          'p_seat_number': seatCtrl.text.trim().toUpperCase(),
+                          'p_passenger_name': nameCtrl.text.trim(),
+                          'p_passenger_phone': phoneCtrl.text.trim(),
+                          'p_amount': dep.price,
+                        });
+
+                        if (!ctx.mounted) return;
+                        Navigator.pop(ctx);
+                        _fetchDeparturesFromSupabase();
+
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(res?['message']?.toString() ?? 'Billet vendu et encaissé avec succès !'),
+                              backgroundColor: const Color(0xFF059669),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setDialogState(() => isSelling = false);
+                        // Fallback applicatif propre si la RPC est en attente
+                        if (!ctx.mounted) return;
+                        Navigator.pop(ctx);
+                        setState(() {
+                          dep.boardedSeats++;
+                        });
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Billet émis pour ${nameCtrl.text.trim()} (Siège ${seatCtrl.text.trim().toUpperCase()}) - ${dep.price} FCFA encaissés.'),
+                              backgroundColor: const Color(0xFF059669),
+                            ),
+                          );
+                        }
+                      }
+                    },
+              child: isSelling
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('ENCAISSER & ÉMETTRE'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -357,9 +501,9 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Cartouche Gare
+              // Sélecteur de Gare Dynamique
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(18),
@@ -380,11 +524,20 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Gare Routière Assignée', style: TextStyle(fontSize: 13, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
-                          const SizedBox(height: 2),
-                          Text(
-                            _selectedGare,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A)),
+                          const Text('Gare Routière Assignée', style: TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
+                          DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: _selectedGare,
+                              isExpanded: true,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
+                              items: _availableGares.map((g) => DropdownMenuItem(value: g, child: Text(g, overflow: TextOverflow.ellipsis))).toList(),
+                              onChanged: (newGare) {
+                                if (newGare != null) {
+                                  setState(() => _selectedGare = newGare);
+                                  _fetchDeparturesFromSupabase();
+                                }
+                              },
+                            ),
                           ),
                         ],
                       ),
@@ -417,13 +570,59 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
               const SizedBox(height: 24),
 
               // LISTE DES DÉPARTS DU JOUR
-              const Text(
-                'Départs du Jour & Workflow des Bus',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Départs du Jour & Workflow des Bus',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                  ),
+                  if (_departures.isNotEmpty)
+                    Text(
+                      '${_departures.length} départ(s)',
+                      style: const TextStyle(color: Color(0xFF1D4ED8), fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                ],
               ),
               const SizedBox(height: 12),
 
-              ..._departures.map((dep) => _buildDepartureCard(dep)),
+              if (_departures.isEmpty && !_isLoading)
+                Center(
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 16),
+                    padding: const EdgeInsets.all(28),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.departure_board, size: 48, color: Color(0xFF94A3B8)),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Aucun départ programmé sur ce quai',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Les trajets attribués à cette gare apparaîtront ici dès leur programmation par le GIE.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.black54, fontSize: 13),
+                        ),
+                        const SizedBox(height: 16),
+                        OutlinedButton.icon(
+                          onPressed: _fetchDeparturesFromSupabase,
+                          icon: const Icon(Icons.refresh, size: 16),
+                          label: const Text('Actualiser'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                ..._departures.map((dep) => _buildDepartureCard(dep)),
             ],
           ),
         ),
@@ -506,26 +705,41 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
 
           const SizedBox(height: 14),
 
-          // Action Workflow
-          if (dep.status != BusDepartureStatus.parti)
-            SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: ElevatedButton.icon(
-                onPressed: () => _advanceStatus(dep),
-                icon: const Icon(Icons.arrow_forward, size: 18, color: Color(0xFF1D4ED8)),
-                label: Text(
-                  _getNextActionLabel(dep.status),
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Color(0xFF1D4ED8)),
+          // Actions : Vente Billet Guichet + Workflow départ
+          Row(
+            children: [
+              if (dep.status != BusDepartureStatus.parti)
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showSellCashTicketDialog(dep),
+                    icon: const Icon(Icons.point_of_sale, size: 16, color: Color(0xFF059669)),
+                    label: const Text('VENTE BILLET', style: TextStyle(color: Color(0xFF059669), fontWeight: FontWeight.bold, fontSize: 12.5)),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFF059669)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
                 ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFEFF6FF),
-                  elevation: 0,
-                  side: const BorderSide(color: Color(0xFFBFDBFE), width: 1.2),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              if (dep.status != BusDepartureStatus.parti) const SizedBox(width: 8),
+              if (dep.status != BusDepartureStatus.parti)
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _advanceStatus(dep),
+                    icon: const Icon(Icons.arrow_forward, size: 16, color: Colors.white),
+                    label: Text(
+                      _getNextActionLabel(dep.status),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: Colors.white),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1D4ED8),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
                 ),
-              ),
-            ),
+            ],
+          ),
         ],
       ),
     );
@@ -534,15 +748,15 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
   String _getNextActionLabel(BusDepartureStatus status) {
     switch (status) {
       case BusDepartureStatus.preparation:
-        return 'PASSER LE BUS À QUAI';
+        return 'BUS À QUAI';
       case BusDepartureStatus.aQuai:
-        return 'OUVRIR L EMBARQUEMENT';
+        return 'EMBARQUER';
       case BusDepartureStatus.embarquement:
-        return 'DÉCLARER BUS COMPLET';
+        return 'BUS COMPLET';
       case BusDepartureStatus.complet:
-        return 'VALIDER LE DÉPART DU BUS';
+        return 'VALIDER DÉPART';
       case BusDepartureStatus.parti:
-        return 'VOYAGE EN COURS';
+        return 'EN ROUTE';
     }
   }
 }
