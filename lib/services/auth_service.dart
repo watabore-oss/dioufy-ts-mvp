@@ -313,6 +313,40 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Commutation directe de rôle pour évaluation, démonstration & navigation immédiate
+  Future<void> simulateRoleForDev(AppRole role, {String? organizationId}) async {
+    final permissions = Set<String>.from(AppPermission.getDefaultPermissions(role));
+    final orgId = organizationId ?? (role == AppRole.gieAdmin ? 'gie_thies' : null);
+
+    final appUser = AppUser(
+      id: 'demo_${role.id}_user',
+      fullName: role == AppRole.superAdmin
+          ? 'Super Administrateur'
+          : (role == AppRole.gieAdmin
+              ? 'Responsable GIE (Thiès)'
+              : (role == AppRole.driver
+                  ? 'Chef de Bord (Chauffeur)'
+                  : (role == AppRole.coxeur ? 'Régulateur Coxeur' : 'Voyageur'))),
+      phone: '+221 77 000 00 00',
+      email: '${role.id}@dioufy-ts.sn',
+      role: role,
+      organizationId: orgId,
+      isGuest: false,
+    );
+
+    final rbacContext = RbacContext(
+      userId: appUser.id,
+      role: role,
+      organizationId: orgId,
+      permissions: permissions,
+      snapshotTimestamp: DateTime.now(),
+    );
+
+    await RbacService.instance.setAuthenticatedContext(rbacContext);
+    await _setCurrentUser(appUser);
+    notifyListeners();
+  }
+
   /// Extrait uniquement les chiffres d'une chaîne
   static String extractDigits(String input) {
     return input.replaceAll(RegExp(r'\D'), '');

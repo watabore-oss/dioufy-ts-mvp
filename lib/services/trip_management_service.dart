@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../features/search/trip.dart';
+import 'organization_service.dart';
 
 /// Service de gestion et de mise à jour des trajets et prix (Super Admin & GIE)
 /// SOURCE DE VÉRITÉ UNIQUE : Supabase table `trips`.
@@ -141,6 +142,11 @@ class TripManagementService extends ChangeNotifier {
       final minute = timeParts.length > 1 ? int.tryParse(timeParts[1]) ?? 0 : 0;
       final departAt = DateTime(now.year, now.month, now.day, hour, minute);
 
+      final targetOrgId = organizationId ??
+          (OrganizationService.instance.activeOrganizations.isNotEmpty
+              ? OrganizationService.instance.activeOrganizations.first.id
+              : null);
+
       final insertData = {
         'from_loc': departure,
         'to_loc': arrival,
@@ -148,7 +154,8 @@ class TripManagementService extends ChangeNotifier {
         'price': price,
         'seats_count': seatsCount,
         'status': 'scheduled',
-        if (organizationId != null) 'organization_id': organizationId,
+        if (targetOrgId != null) 'organization_id': targetOrgId,
+        if (targetOrgId != null) 'agency_id': targetOrgId,
         if (driverId != null) 'driver_id': driverId,
         if (vehicleId != null) 'vehicle_id': vehicleId,
       };

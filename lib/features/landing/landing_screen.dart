@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../core/constants.dart';
+import '../../core/permissions/app_role.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
 import '../auth/register_screen.dart';
+import '../admin/super_admin_dashboard_screen.dart';
+import '../gie/gie_dashboard_screen.dart';
+import '../chauffeur/chauffeur_screen.dart';
+import '../coxeur/coxeur_dashboard_screen.dart';
 import '../digital_display/presentation/digital_display_widget.dart';
 import '../digital_display/presentation/mobile_hero_slide_zone.dart';
 import '../search/search_results_screen.dart';
@@ -342,6 +347,172 @@ class _LandingScreenState extends State<LandingScreen> {
     );
   }
 
+  void _openRoleNavigationModal() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Espaces Métiers & Démonstration',
+                        style: TextStyle(
+                          fontSize: 18.5,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 24),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Sélectionnez un profil pour explorer immédiatement les fonctionnalités :',
+                    style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildRoleOptionTile(
+                    icon: Icons.admin_panel_settings_rounded,
+                    color: const Color(0xFF1D4ED8),
+                    title: '👑 Super Administration',
+                    subtitle: 'Cockpit réel, KPIs d\'exploitation & Enregistrement des GIE (Priorité 1 & 3)',
+                    onTap: () async {
+                      Navigator.pop(ctx);
+                      await AuthService.instance.simulateRoleForDev(AppRole.superAdmin);
+                      if (mounted) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const SuperAdminDashboardScreen()),
+                        );
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  _buildRoleOptionTile(
+                    icon: Icons.account_balance_rounded,
+                    color: const Color(0xFF059669),
+                    title: '🏢 Coopérative GIE',
+                    subtitle: 'Programmation des départs, Flotte de bus & Validation caisses (Priorité 2)',
+                    onTap: () async {
+                      Navigator.pop(ctx);
+                      await AuthService.instance.simulateRoleForDev(AppRole.gieAdmin, organizationId: 'gie_thies');
+                      if (mounted) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const GieDashboardScreen()),
+                        );
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  _buildRoleOptionTile(
+                    icon: Icons.badge_rounded,
+                    color: const Color(0xFFD97706),
+                    title: '🚌 Chef de Bord / Chauffeur',
+                    subtitle: 'Feuille de route, contrôle des passagers & clôture caisse',
+                    onTap: () async {
+                      Navigator.pop(ctx);
+                      await AuthService.instance.simulateRoleForDev(AppRole.driver);
+                      if (mounted) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const ChauffeurScreen()),
+                        );
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  _buildRoleOptionTile(
+                    icon: Icons.departure_board_rounded,
+                    color: const Color(0xFF7C3AED),
+                    title: '🎫 Régulation Quai / Coxeur',
+                    subtitle: 'Contrôle départs de quai, scan QR code & guichet physique',
+                    onTap: () async {
+                      Navigator.pop(ctx);
+                      await AuthService.instance.simulateRoleForDev(AppRole.coxeur);
+                      if (mounted) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const CoxeurDashboardScreen()),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRoleOptionTile({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.2), width: 1.2),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF0F172A)),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.3),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Color(0xFF94A3B8)),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -581,10 +752,21 @@ class _LandingScreenState extends State<LandingScreen> {
             ],
           ),
 
-          // DROITE : Sélecteur multilingue & bascule de thème
+          // DROITE : Bouton Espaces Métiers, Sélecteur multilingue & bascule de thème
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Bouton Espaces Métiers & Démo (sur desktop)
+              if (!isMobile) ...[
+                IconButton(
+                  icon: const Icon(Icons.business_center_rounded, size: 22, color: Color(0xFF1D4ED8)),
+                  tooltip: 'Espaces Métiers & Démonstration',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _openRoleNavigationModal,
+                ),
+                const SizedBox(width: 8),
+              ],
+
               // Sélecteur de langue (FR ▾, WO, EN)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -708,8 +890,10 @@ class _LandingScreenState extends State<LandingScreen> {
   }
 
   Widget _buildAuthButtonsRow({bool isMobile = false}) {
-    return Row(
+    return Column(
       children: [
+        Row(
+          children: [
         // BOUTON SE CONNECTER (Bleu primaire brillant avec libellé centré)
         Expanded(
           child: SizedBox(
@@ -806,8 +990,33 @@ class _LandingScreenState extends State<LandingScreen> {
           ),
         ),
       ],
-    );
-  }
+    ),
+    const SizedBox(height: 12),
+    // BOUTON ACCÈS DIRECT ESPACES MÉTIERS & DÉMO
+    SizedBox(
+      height: 46,
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _openRoleNavigationModal,
+        icon: const Icon(Icons.hub_rounded, size: 19, color: Color(0xFF1D4ED8)),
+        label: const Text(
+          'Accéder aux Espaces Métiers (Super Admin • GIE • Démo)',
+          style: TextStyle(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF1D4ED8),
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          backgroundColor: const Color(0xFFEFF6FF),
+          side: const BorderSide(color: Color(0xFFBFDBFE), width: 1.2),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      ),
+    ),
+  ],
+);
+}
 
   Widget _buildOrDivider() {
     return const Row(

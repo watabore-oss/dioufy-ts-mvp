@@ -4,6 +4,7 @@ import 'feature_flags/feature_flag_service.dart';
 import '../core/permissions/rbac_service.dart';
 import '../services/payment_config_service.dart';
 import '../services/trip_management_service.dart';
+import '../services/organization_service.dart';
 import '../services/auth_service.dart';
 import 'module_registry.dart';
 import '../modules/booking/booking_module.dart';
@@ -36,10 +37,13 @@ class AppBootstrap {
     // 3. Initialiser le service d'autorisation contextuelle RBAC
     await RbacService.instance.initialize();
 
-    // 4. Initialiser les passerelles de paiement (Wave 774691379, PayDunya, Flutterwave, PayTech, etc.)
+    // 4. Initialiser la gouvernance des coopératives GIE
+    await OrganizationService.instance.initialize();
+
+    // 5. Initialiser les passerelles de paiement (Wave, OM, etc.)
     await PaymentConfigService.instance.initialize();
 
-    // 5. Initialiser la gestion des trajets et tarification FCFA
+    // 6. Initialiser la gestion des trajets et tarification FCFA
     await TripManagementService.instance.initialize();
 
     // 6. Initialiser le service d'authentification et session utilisateur (écoute Supabase Auth active)

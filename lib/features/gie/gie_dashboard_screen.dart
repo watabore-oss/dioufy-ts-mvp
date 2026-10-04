@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme.dart';
+import '../../core/constants.dart';
 import '../../core/permissions/app_role.dart';
 import '../../services/auth_service.dart';
 import '../../services/audit_service.dart';
+import '../../services/trip_management_service.dart';
+import '../search/trip.dart';
 
 /// Tableau de bord d'Exploitation et Gestion GIE Transporteur
 /// 100% Connecté à Supabase — Zéro données factices.
@@ -29,11 +32,12 @@ class _GieDashboardScreenState extends State<GieDashboardScreen> with SingleTick
 
   List<Map<String, dynamic>> _flotte = [];
   List<Map<String, dynamic>> _caisses = [];
+  List<Trip> _gieTrips = [];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _loadGieData();
   }
 
@@ -202,10 +206,29 @@ class _GieDashboardScreenState extends State<GieDashboardScreen> with SingleTick
 
         final pendingCaisses = fetchedCaisses.where((c) => c['status'] == 'closed' || c['status'] == 'open').length;
 
+        // Récupération de l'ensemble des départs réels de la coopérative GIE
+        List<Trip> gieTripsList = [];
+        try {
+          var allGieTripsQuery = client.from('trips').select('*');
+          if (_organizationId != null && _organizationId!.isNotEmpty) {
+            allGieTripsQuery = allGieTripsQuery.or('organization_id.eq.$_organizationId,agency_id.eq.$_organizationId');
+          }
+          final allTripsRes = await allGieTripsQuery.order('depart_at', ascending: true);
+          gieTripsList = allTripsRes.map((t) => Trip.fromMap(t)).toList();
+        } catch (tripErr) {
+          debugPrint('[GieDashboard] Note query trips fallback: $tripErr');
+          if (_organizationId != null && _organizationId!.isNotEmpty) {
+            gieTripsList = TripManagementService.instance.trips
+                .where((t) => t.organizationId == _organizationId || t.company.toLowerCase() == _gieName.toLowerCase())
+                .toList();
+          }
+        }
+
         if (mounted) {
           setState(() {
             _flotte = fetchedVehicles;
             _caisses = fetchedCaisses;
+            _gieTrips = gieTripsList;
             _recettesJour = totalJour;
             _voyagesCount = tripsCount;
             _busActifs = busCount;
@@ -449,6 +472,7 @@ class _GieDashboardScreenState extends State<GieDashboardScreen> with SingleTick
           ],
           bottom: TabBar(
             controller: _tabController,
+            isScrollable: true,
             indicatorColor: const Color(0xFF1D4ED8),
             indicatorWeight: 3.5,
             labelColor: const Color(0xFF1D4ED8),
@@ -457,6 +481,7 @@ class _GieDashboardScreenState extends State<GieDashboardScreen> with SingleTick
             unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13.5),
             tabs: const [
               Tab(icon: Icon(Icons.insights), text: 'Vue Générale'),
+              Tab(icon: Icon(Icons.departure_board), text: 'Trajets & Départs'),
               Tab(icon: Icon(Icons.directions_bus), text: 'Flotte & Bus'),
               Tab(icon: Icon(Icons.account_balance_wallet), text: 'Caisses à Valider'),
             ],
@@ -477,6 +502,7 @@ class _GieDashboardScreenState extends State<GieDashboardScreen> with SingleTick
                 controller: _tabController,
                 children: [
                   _buildOverviewTab(isGieAdmin),
+                  _buildTripsTab(),
                   _buildFleetTab(),
                   _buildCaissesTab(isGieAdmin),
                 ],
@@ -516,7 +542,64 @@ class _GieDashboardScreenState extends State<GieDashboardScreen> with SingleTick
           ),
         ),
 
-        const SizedBox(height: 18),
+        // Action rapide de programmation de départs
+        Container(
+          margin: const EdgeInsets.only(top: 14, bottom: 4),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF1D4ED8).withValues(alpha: 0.2)),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF1D4ED8).withValues(alpha: 0.04),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFEFF6FF),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.departure_board, color: Color(0xFF1D4ED8), size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Programmation des Départs',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A)),
+                    ),
+                    Text(
+                      '${_gieTrips.length} départ(s) actif(s) pour $_gieName',
+                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: _showAddTripDialog,
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('+ Départ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF059669),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 14),
 
         // KPI GRILLE
         Row(
@@ -656,6 +739,488 @@ class _GieDashboardScreenState extends State<GieDashboardScreen> with SingleTick
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // ONGLET TRAJETS & DÉPARTS DU GIE (PRIORITÉ 2)
+  // ===========================================================================
+  Widget _buildTripsTab() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${_gieTrips.length} départ(s) programmé(s)',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A)),
+              ),
+              ElevatedButton.icon(
+                onPressed: _showAddTripDialog,
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Programmer un Départ'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF059669),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _gieTrips.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFF1F5F9),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.departure_board_outlined, size: 48, color: Color(0xFF64748B)),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Aucun départ programmé',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Programmez vos lignes de transport et vos horaires pour $_gieName. Vos billets seront automatiquement disponibles à la réservation pour les voyageurs et guichets.',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.black54, fontSize: 13.5),
+                        ),
+                        const SizedBox(height: 18),
+                        ElevatedButton.icon(
+                          onPressed: _showAddTripDialog,
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Programmer un Départ'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF059669),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                  itemCount: _gieTrips.length,
+                  itemBuilder: (ctx, i) {
+                    final trip = _gieTrips[i];
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.03),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEFF6FF),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Icon(Icons.directions_bus, size: 18, color: Color(0xFF1D4ED8)),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      trip.company,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF1D4ED8),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFECFDF5),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Text(
+                                    'PROGRAMMÉ',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF059669),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    "${trip.departure} → ${trip.arrival}",
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 16,
+                              runSpacing: 6,
+                              children: [
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.access_time, size: 14, color: Colors.black54),
+                                    const SizedBox(width: 4),
+                                    Text("Départ: ${trip.time}", style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                                  ],
+                                ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.airline_seat_recline_normal, size: 14, color: Colors.black54),
+                                    const SizedBox(width: 4),
+                                    Text("${trip.seatsCount} places • ${trip.type}",
+                                        style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const Divider(height: 20, thickness: 0.8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const XofCurrencyBadge(size: 16),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      "${trip.price} FCFA",
+                                      style: const TextStyle(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w900,
+                                        color: Color(0xFF059669),
+                                      ),
+                                    ),
+                                    const Text(" / place", style: TextStyle(fontSize: 12, color: Colors.black54)),
+                                  ],
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, size: 20, color: Colors.redAccent),
+                                  tooltip: 'Annuler ce départ',
+                                  onPressed: () => _confirmDeleteTrip(trip),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  void _confirmDeleteTrip(Trip trip) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Annuler ce départ ?"),
+        content: Text("Êtes-vous sûr de vouloir annuler le trajet ${trip.departure} → ${trip.arrival} à ${trip.time} ?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Non, conserver")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await TripManagementService.instance.deleteTrip(trip.id);
+              _loadGieData();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Départ annulé."), backgroundColor: Colors.black87),
+                );
+              }
+            },
+            child: const Text("Oui, annuler"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddTripDialog() {
+    final formKey = GlobalKey<FormState>();
+    String selectedDep = AppConstants.stations.first;
+    String selectedArr = AppConstants.stations.length > 1 ? AppConstants.stations[1] : AppConstants.stations.first;
+    final timeCtrl = TextEditingController(text: "07:30");
+    final priceCtrl = TextEditingController(text: "5000");
+    final seatsCtrl = TextEditingController(text: "45");
+    String? selectedVehicleId;
+    bool isSaving = false;
+
+    // Si la flotte contient des véhicules, présélectionner le premier et récupérer sa capacité
+    if (_flotte.isNotEmpty) {
+      final firstVehicle = _flotte.first;
+      selectedVehicleId = firstVehicle['id']?.toString();
+      final cap = firstVehicle['capacity']?.toString();
+      if (cap != null && cap.isNotEmpty) {
+        seatsCtrl.text = cap;
+      }
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Row(
+            children: [
+              const Icon(Icons.departure_board, color: Color(0xFF1D4ED8)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  "Programmer un Départ ($_gieName)",
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Ce départ sera rattaché à votre coopérative et publié en direct pour les réservations.",
+                    style: TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Sélecteur de véhicule dans la flotte GIE avec récupération auto de la capacité
+                  if (_flotte.isNotEmpty) ...[
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedVehicleId,
+                      decoration: const InputDecoration(
+                        labelText: "Véhicule / Car affecté *",
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.directions_bus),
+                      ),
+                      items: _flotte.map((bus) {
+                        final plate = bus['plate_number']?.toString() ?? 'Bus';
+                        final cap = bus['capacity']?.toString() ?? '45';
+                        final model = bus['model']?.toString() ?? '';
+                        return DropdownMenuItem<String>(
+                          value: bus['id']?.toString(),
+                          child: Text("$plate ($cap pl. - $model)", overflow: TextOverflow.ellipsis),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          final match = _flotte.firstWhere((b) => b['id']?.toString() == val);
+                          final autoCap = match['capacity']?.toString() ?? '45';
+                          setDialogState(() {
+                            selectedVehicleId = val;
+                            seatsCtrl.text = autoCap; // Capacité récupérée automatiquement !
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  // Gare de départ
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedDep,
+                    decoration: const InputDecoration(
+                      labelText: "Gare de départ *",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.trip_origin, color: Color(0xFF059669)),
+                    ),
+                    items: AppConstants.stations.map((st) {
+                      return DropdownMenuItem<String>(value: st, child: Text(st, overflow: TextOverflow.ellipsis));
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) setDialogState(() => selectedDep = val);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Gare d'arrivée
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedArr,
+                    decoration: const InputDecoration(
+                      labelText: "Gare d'arrivée *",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.location_on, color: Color(0xFFDC2626)),
+                    ),
+                    items: AppConstants.stations.map((st) {
+                      return DropdownMenuItem<String>(value: st, child: Text(st, overflow: TextOverflow.ellipsis));
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) setDialogState(() => selectedArr = val);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Heure de départ
+                  TextFormField(
+                    controller: timeCtrl,
+                    decoration: const InputDecoration(
+                      labelText: "Heure de départ (HH:mm) *",
+                      hintText: "Ex: 07:30",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.access_time),
+                    ),
+                    validator: (v) => (v == null || v.trim().isEmpty) ? "L'heure est requise" : null,
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Tarif en FCFA
+                  TextFormField(
+                    controller: priceCtrl,
+                    decoration: const InputDecoration(
+                      labelText: "Tarif du billet (FCFA) *",
+                      hintText: "Ex: 5000",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.payments_outlined),
+                      suffixText: "FCFA",
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return "Le prix est requis";
+                      final p = int.tryParse(v.trim());
+                      if (p == null || p <= 0) return "Prix FCFA invalide";
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Capacité en sièges (auto-alimentée par le car sélectionné)
+                  TextFormField(
+                    controller: seatsCtrl,
+                    decoration: const InputDecoration(
+                      labelText: "Capacité totale (sièges) *",
+                      hintText: "Ex: 45",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.event_seat),
+                      helperText: "Récupérée automatiquement du véhicule sélectionné",
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return "Capacité requise";
+                      final s = int.tryParse(v.trim());
+                      if (s == null || s <= 0) return "Nombre de sièges invalide";
+                      return null;
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSaving ? null : () => Navigator.pop(ctx),
+              child: const Text("Annuler"),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF059669),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      if (selectedDep == selectedArr) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("La gare de départ et d'arrivée doivent être différentes."),
+                            backgroundColor: Colors.redAccent,
+                          ),
+                        );
+                        return;
+                      }
+
+                      setDialogState(() => isSaving = true);
+                      final p = int.parse(priceCtrl.text.trim());
+                      final s = int.parse(seatsCtrl.text.trim());
+
+                      try {
+                        await TripManagementService.instance.addTrip(
+                          departure: selectedDep,
+                          arrival: selectedArr,
+                          company: _gieName,
+                          time: timeCtrl.text.trim(),
+                          type: "CONFORT",
+                          price: p,
+                          seatsCount: s,
+                          organizationId: _organizationId,
+                          vehicleId: selectedVehicleId,
+                        );
+
+                        if (!ctx.mounted) return;
+                        Navigator.pop(ctx);
+                        _loadGieData();
+
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text("Départ $selectedDep → $selectedArr ($p FCFA) programmé avec succès !"),
+                              backgroundColor: const Color(0xFF059669),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setDialogState(() => isSaving = false);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text("Erreur: $e"), backgroundColor: Colors.redAccent),
+                          );
+                        }
+                      }
+                    },
+              child: isSaving
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text("PROGRAMMER"),
+            ),
+          ],
+        ),
       ),
     );
   }

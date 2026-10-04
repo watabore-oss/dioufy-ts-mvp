@@ -5,6 +5,7 @@ import '../../core/permissions/app_permission.dart';
 import '../../core/permissions/permission_guard.dart';
 import '../../services/payment_config_service.dart';
 import '../../services/trip_management_service.dart';
+import '../../services/organization_service.dart';
 import '../../services/kpi_service.dart';
 import '../../app/feature_flags/feature_flag_service.dart';
 import '../../app/feature_flags/feature_flag_state.dart';
@@ -15,6 +16,7 @@ import '../search/trip.dart';
 /// Grand Tableau de Bord Centralisé Super Administrateur (Dioufy-TS)
 /// Console d'exploitation et de gouvernance globale :
 /// - Cockpit Exécutif & KPIs d'Exploitation (CA Encaissé, Taux d'Utilisation des Billets, Départs Actifs)
+/// - Gestion et Enregistrement Souverain des Coopératives GIE
 /// - Passerelles de Paiement paramétrables dynamiquement
 /// - Trajets & Tarifs en FCFA avec badge XOF
 /// - Activation des Modules Compilés (Feature Flags)
@@ -38,9 +40,9 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
   void initState() {
     super.initState();
     _tabController = TabController(
-      length: 6,
+      length: 7,
       vsync: this,
-      initialIndex: widget.initialTab.clamp(0, 5),
+      initialIndex: widget.initialTab.clamp(0, 6),
     );
     _refreshKpis();
   }
@@ -138,6 +140,7 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
               unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13.5),
               tabs: const [
                 Tab(icon: Icon(Icons.analytics_outlined), text: 'Cockpit & KPIs'),
+                Tab(icon: Icon(Icons.corporate_fare_outlined), text: 'Coopératives GIE'),
                 Tab(icon: Icon(Icons.payments_outlined), text: 'Passerelles Paiement'),
                 Tab(icon: Icon(Icons.directions_bus_outlined), text: 'Trajets & Prix FCFA'),
                 Tab(icon: Icon(Icons.toggle_on_outlined), text: 'Modules & Flags'),
@@ -150,6 +153,7 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
             controller: _tabController,
             children: [
               _buildKpiTab(),
+              _buildGieTab(),
               _buildPaymentsTab(),
               _buildTripsTab(),
               _buildModulesTab(),
@@ -325,82 +329,169 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+
+            // Métriques d'infrastructure opérationnelle réelle
+            AnimatedBuilder(
+              animation: OrganizationService.instance,
+              builder: (context, _) {
+                final orgService = OrganizationService.instance;
+                final totalVehicles = orgService.organizations.fold<int>(0, (sum, g) => sum + g.vehicleCount);
+                return Row(
+                  children: [
+                    // 5. Coopératives GIE Actives
+                    Expanded(
+                      child: _buildMetricCard(
+                        title: "COOPÉRATIVES GIE",
+                        formulaSubtitle: "Opérateurs partenaires actifs",
+                        value: "${orgService.activeOrganizations.length}",
+                        icon: Icons.corporate_fare,
+                        iconColor: const Color(0xFF1D4ED8),
+                        bgColor: const Color(0xFFEFF6FF),
+                        footerText: "${orgService.organizations.length} coopérative(s) au total",
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // 6. Flotte de Véhicules Enregistrés
+                    Expanded(
+                      child: _buildMetricCard(
+                        title: "FLOTTE ENREGISTRÉE",
+                        formulaSubtitle: "Bus de transport rattachés",
+                        value: "$totalVehicles",
+                        icon: Icons.directions_bus_filled,
+                        iconColor: const Color(0xFF0F766E),
+                        bgColor: const Color(0xFFF0FDFA),
+                        footerText: "Véhicules aptes aux lignes interurbaines",
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
             const SizedBox(height: 20),
 
             // Répartition du Chiffre d'Affaires par Passerelle de Paiement
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.black12),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2)),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.pie_chart_outline, size: 20, color: DioufyColors.primaryDark),
-                      SizedBox(width: 8),
-                      Text(
-                        "Répartition des Encaissements par Moyen de Paiement",
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: DioufyColors.primaryDark),
+            if (report.totalRevenueCollected == 0)
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.black12),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 2)),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF8FAFC),
+                        shape: BoxShape.circle,
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  ...report.revenueByGateway.entries.map((entry) {
-                    final gatewayName = _formatGatewayLabel(entry.key);
-                    final amount = entry.value;
-                    final pct = report.totalRevenueCollected > 0
-                        ? (amount / report.totalRevenueCollected) * 100
-                        : 0.0;
+                      child: const Icon(Icons.point_of_sale_outlined, size: 36, color: Color(0xFF64748B)),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      "Plateforme Prête • 0 FCFA Encaissé",
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      "Les indicateurs de chiffre d'affaires et la répartition par passerelle (Wave, Orange Money, Free Money, Espèces) s'actualiseront en direct dès les premières réservations validées.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12.5, color: Colors.black54),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        _buildGatewayBadge('Wave Sénégal', const Color(0xFF00B2FE)),
+                        _buildGatewayBadge('Orange Money', const Color(0xFFFF7900)),
+                        _buildGatewayBadge('Free Money', const Color(0xFFDC2626)),
+                        _buildGatewayBadge('Espèces (Gare)', const Color(0xFF059669)),
+                      ],
+                    ),
+                  ],
+                ),
+              )
+            else
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.black12),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2)),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.pie_chart_outline, size: 20, color: DioufyColors.primaryDark),
+                        SizedBox(width: 8),
+                        Text(
+                          "Répartition des Encaissements par Moyen de Paiement",
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: DioufyColors.primaryDark),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    ...report.revenueByGateway.entries.map((entry) {
+                      final gatewayName = _formatGatewayLabel(entry.key);
+                      final amount = entry.value;
+                      final pct = report.totalRevenueCollected > 0
+                          ? (amount / report.totalRevenueCollected) * 100
+                          : 0.0;
 
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(gatewayName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    "$amount FCFA",
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  const XofCurrencyBadge(size: 12),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    "(${pct.toStringAsFixed(1)}%)",
-                                    style: const TextStyle(color: Colors.black54, fontSize: 11),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          LinearProgressIndicator(
-                            value: (pct / 100).clamp(0.0, 1.0),
-                            backgroundColor: Colors.grey.shade200,
-                            color: _getGatewayColor(entry.key),
-                            minHeight: 6,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
-                ],
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(gatewayName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      "$amount FCFA",
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    const XofCurrencyBadge(size: 12),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      "(${pct.toStringAsFixed(1)}%)",
+                                      style: const TextStyle(color: Colors.black54, fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            LinearProgressIndicator(
+                              value: (pct / 100).clamp(0.0, 1.0),
+                              backgroundColor: Colors.grey.shade200,
+                              color: _getGatewayColor(entry.key),
+                              minHeight: 6,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
               ),
-            ),
           ],
         ],
       );
@@ -565,6 +656,467 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
 
   String _formatTime(DateTime dt) {
     return "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
+  }
+
+  Widget _buildGatewayBadge(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(width: 7, height: 7, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          const SizedBox(width: 6),
+          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // 1.BIS. ONGLET COOPÉRATIVES GIE (PRIORITÉ 1)
+  // ===========================================================================
+  Widget _buildGieTab() {
+    return AnimatedBuilder(
+      animation: OrganizationService.instance,
+      builder: (context, _) {
+        final orgService = OrganizationService.instance;
+        final orgs = orgService.organizations;
+        final activeCount = orgService.activeOrganizations.length;
+
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            // Bandeau d'actions et synthèse GIE
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF1D4ED8).withOpacity(0.25)),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF1D4ED8).withOpacity(0.06),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.corporate_fare, color: Color(0xFF1D4ED8), size: 28),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Coopératives & GIE Partenaires",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          "$activeCount active(s) sur ${orgs.length} enregistrée(s)",
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () => _showAddGieDialog(context),
+                    icon: const Icon(Icons.add, size: 16, color: Colors.white),
+                    label: const Text(
+                      "+ Enregistrer GIE",
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF059669),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            if (orgService.isLoading && orgs.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Center(
+                  child: CircularProgressIndicator(color: DioufyColors.primaryDark),
+                ),
+              )
+            else if (orgs.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.black12),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.business_outlined, size: 54, color: Color(0xFF94A3B8)),
+                    const SizedBox(height: 14),
+                    const Text(
+                      "Aucune coopérative GIE enregistrée",
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      "Enregistrez les coopératives de transport pour leur permettre d'administrer leur flotte, leurs bus et de programmer leurs départs.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () => _showAddGieDialog(context),
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text("Enregistrer le premier GIE"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF059669),
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              ...orgs.map((org) => _buildGieCard(org)),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildGieCard(GieOrganization org) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: org.isActive ? const Color(0xFF1D4ED8).withOpacity(0.35) : Colors.black12,
+          width: org.isActive ? 1.5 : 1.0,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: org.isActive ? const Color(0xFFEFF6FF) : Colors.grey.shade100,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.directions_bus,
+                    color: org.isActive ? const Color(0xFF1D4ED8) : Colors.grey,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              org.name,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: org.isActive ? const Color(0xFFECFDF5) : Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              org.isActive ? 'ACTIF' : 'SUSPENDU',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: org.isActive ? const Color(0xFF059669) : Colors.grey.shade600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        "Code: ${org.code.isNotEmpty ? org.code : org.id} • Coopérative GIE",
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: org.isActive,
+                  activeThumbColor: const Color(0xFF059669),
+                  onChanged: (val) async {
+                    try {
+                      await OrganizationService.instance.toggleOrganizationStatus(org.id, val);
+                    } catch (_) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("Échec de la modification du statut GIE."),
+                            backgroundColor: Colors.redAccent,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ],
+            ),
+            const Divider(height: 20, thickness: 0.8),
+            Wrap(
+              spacing: 16,
+              runSpacing: 8,
+              children: [
+                if (org.contactPhone != null && org.contactPhone!.isNotEmpty)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.phone_outlined, size: 14, color: Color(0xFF64748B)),
+                      const SizedBox(width: 4),
+                      Text(org.contactPhone!, style: const TextStyle(fontSize: 12, color: Color(0xFF475569))),
+                    ],
+                  ),
+                if (org.contactEmail != null && org.contactEmail!.isNotEmpty)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.email_outlined, size: 14, color: Color(0xFF64748B)),
+                      const SizedBox(width: 4),
+                      Text(org.contactEmail!, style: const TextStyle(fontSize: 12, color: Color(0xFF475569))),
+                    ],
+                  ),
+                if (org.licenseNumber != null && org.licenseNumber!.isNotEmpty)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.verified_outlined, size: 14, color: Color(0xFF059669)),
+                      const SizedBox(width: 4),
+                      Text("Licence: ${org.licenseNumber}", style: const TextStyle(fontSize: 12, color: Color(0xFF475569))),
+                    ],
+                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.directions_bus_filled_outlined, size: 14, color: Color(0xFF1D4ED8)),
+                    const SizedBox(width: 4),
+                    Text(
+                      "${org.vehicleCount} bus rattaché(s)",
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1D4ED8)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddGieDialog(BuildContext context) {
+    final formKey = GlobalKey<FormState>();
+    final nameCtrl = TextEditingController();
+    final codeCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    final licenseCtrl = TextEditingController();
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.corporate_fare, color: Color(0xFF1D4ED8)),
+              SizedBox(width: 10),
+              Text("Enregistrer un GIE / Coopérative", style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Création de la coopérative de transport dans Supabase. Les gérants et chauffeurs pourront ensuite y être rattachés.",
+                    style: TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: "Nom officiel de la coopérative *",
+                      hintText: "Ex: GIE Ndiambour Louga",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.business),
+                    ),
+                    onChanged: (v) {
+                      if (codeCtrl.text.isEmpty || codeCtrl.text.startsWith('gie_')) {
+                        final autoCode = v
+                            .trim()
+                            .toLowerCase()
+                            .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+                            .replaceAll(RegExp(r'^_+|_+$'), '');
+                        codeCtrl.text = autoCode.isEmpty ? '' : 'gie_$autoCode';
+                      }
+                    },
+                    validator: (v) => (v == null || v.trim().isEmpty) ? "Le nom est obligatoire" : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: codeCtrl,
+                    decoration: const InputDecoration(
+                      labelText: "Code identifiant unique *",
+                      hintText: "Ex: gie_ndiambour",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.vpn_key_outlined),
+                    ),
+                    validator: (v) => (v == null || v.trim().isEmpty) ? "L'identifiant unique est obligatoire" : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: "Téléphone de contact",
+                      hintText: "Ex: +221 77 123 45 67",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.phone_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: "Email officiel de contact",
+                      hintText: "Ex: contact@gie-ndiambour.sn",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.email_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: licenseCtrl,
+                    decoration: const InputDecoration(
+                      labelText: "Numéro de licence transport",
+                      hintText: "Ex: LIC-TR-2026-SN",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.badge_outlined),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+              child: const Text("Annuler"),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF059669),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      setDialogState(() => isSubmitting = true);
+
+                      try {
+                        final created = await OrganizationService.instance.createOrganization(
+                          name: nameCtrl.text.trim(),
+                          code: codeCtrl.text.trim(),
+                          contactPhone: phoneCtrl.text.trim().isNotEmpty ? phoneCtrl.text.trim() : null,
+                          contactEmail: emailCtrl.text.trim().isNotEmpty ? emailCtrl.text.trim() : null,
+                          licenseNumber: licenseCtrl.text.trim().isNotEmpty ? licenseCtrl.text.trim() : null,
+                        );
+
+                        if (!ctx.mounted) return;
+                        Navigator.pop(ctx);
+
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text("Coopérative '${created.name}' enregistrée avec succès !"),
+                              backgroundColor: const Color(0xFF059669),
+                            ),
+                          );
+                        }
+                      } catch (err) {
+                        setDialogState(() => isSubmitting = false);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text("Erreur lors de l'enregistrement de la coopérative: $err"),
+                              backgroundColor: Colors.redAccent,
+                            ),
+                          );
+                        }
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                  : const Text("ENREGISTRER"),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // ===========================================================================
@@ -955,60 +1507,206 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
   }
 
   void _editTripDialog(BuildContext context, Trip? trip) {
-    final depCtrl = TextEditingController(text: trip?.departure ?? 'Dakar');
-    final arrCtrl = TextEditingController(text: trip?.arrival ?? 'Touba');
-    final compCtrl = TextEditingController(text: trip?.company ?? 'Dioufy Express');
+    final activeOrgs = OrganizationService.instance.activeOrganizations;
+
+    // Valeurs initiales
+    String selectedDep = trip?.departure ?? AppConstants.stations.first;
+    if (!AppConstants.stations.contains(selectedDep)) {
+      selectedDep = AppConstants.stations.first;
+    }
+
+    String selectedArr = trip?.arrival ?? AppConstants.stations[1];
+    if (!AppConstants.stations.contains(selectedArr)) {
+      selectedArr = AppConstants.stations[1];
+    }
+
+    String? selectedOrgId = activeOrgs.isNotEmpty ? activeOrgs.first.id : null;
+    String selectedCompanyName = trip?.company ?? (activeOrgs.isNotEmpty ? activeOrgs.first.name : 'Coopérative Partenaire');
+    if (trip != null) {
+      final matches = activeOrgs.where((o) => o.name.toLowerCase() == trip.company.toLowerCase());
+      if (matches.isNotEmpty) {
+        selectedOrgId = matches.first.id;
+      }
+    }
+
+    final timeCtrl = TextEditingController(text: trip?.time ?? "07:30");
     final priceCtrl = TextEditingController(text: trip?.price.toString() ?? '5000');
-    final seatsCtrl = TextEditingController(text: trip?.seatsCount.toString() ?? '50');
+    final seatsCtrl = TextEditingController(text: trip?.seatsCount.toString() ?? '45');
+    final formKey = GlobalKey<FormState>();
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(trip == null ? "Créer un Trajet" : "Modifier le Trajet"),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Row(
             children: [
-              TextField(controller: depCtrl, decoration: const InputDecoration(labelText: "Ville de départ")),
-              TextField(controller: arrCtrl, decoration: const InputDecoration(labelText: "Ville d'arrivée")),
-              TextField(controller: compCtrl, decoration: const InputDecoration(labelText: "Compagnie / GIE")),
-              TextField(
-                controller: priceCtrl,
-                decoration: const InputDecoration(labelText: "Prix en FCFA"),
-                keyboardType: TextInputType.number,
-              ),
-              TextField(
-                controller: seatsCtrl,
-                decoration: const InputDecoration(labelText: "Nombre total de sièges"),
-                keyboardType: TextInputType.number,
-              ),
+              const Icon(Icons.directions_bus, color: Color(0xFF1D4ED8)),
+              const SizedBox(width: 8),
+              Text(trip == null ? "Programmer un Trajet" : "Modifier le Trajet",
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
             ],
           ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Annuler")),
-          ElevatedButton(
-            onPressed: () {
-              final p = int.tryParse(priceCtrl.text.trim()) ?? 5000;
-              final seats = int.tryParse(seatsCtrl.text.trim()) ?? 50;
-              if (trip == null) {
-                TripManagementService.instance.addTrip(
-                  departure: depCtrl.text.trim(),
-                  arrival: arrCtrl.text.trim(),
-                  company: compCtrl.text.trim(),
-                  time: "08:00",
-                  type: "CONFORT",
-                  price: p,
-                  seatsCount: seats,
-                );
-              } else {
-                TripManagementService.instance.updateTripPrice(trip.id, p);
-              }
-              Navigator.pop(ctx);
-            },
-            child: const Text("Valider"),
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Sélecteur de Coopérative GIE
+                  if (activeOrgs.isNotEmpty) ...[
+                    DropdownButtonFormField<String>(
+                      value: activeOrgs.any((o) => o.id == selectedOrgId) ? selectedOrgId : activeOrgs.first.id,
+                      decoration: const InputDecoration(
+                        labelText: "Coopérative / GIE Opérateur *",
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.corporate_fare),
+                      ),
+                      items: activeOrgs.map((org) {
+                        return DropdownMenuItem<String>(
+                          value: org.id,
+                          child: Text(org.name, overflow: TextOverflow.ellipsis),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          final match = activeOrgs.firstWhere((o) => o.id == val);
+                          setDialogState(() {
+                            selectedOrgId = val;
+                            selectedCompanyName = match.name;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  // Gare de départ
+                  DropdownButtonFormField<String>(
+                    value: selectedDep,
+                    decoration: const InputDecoration(
+                      labelText: "Gare de départ *",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.trip_origin, color: Color(0xFF059669)),
+                    ),
+                    items: AppConstants.stations.map((st) {
+                      return DropdownMenuItem<String>(value: st, child: Text(st, overflow: TextOverflow.ellipsis));
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) setDialogState(() => selectedDep = val);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Gare d'arrivée
+                  DropdownButtonFormField<String>(
+                    value: selectedArr,
+                    decoration: const InputDecoration(
+                      labelText: "Gare d'arrivée *",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.location_on, color: Color(0xFFDC2626)),
+                    ),
+                    items: AppConstants.stations.map((st) {
+                      return DropdownMenuItem<String>(value: st, child: Text(st, overflow: TextOverflow.ellipsis));
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) setDialogState(() => selectedArr = val);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Heure de départ
+                  TextFormField(
+                    controller: timeCtrl,
+                    decoration: const InputDecoration(
+                      labelText: "Heure de départ (HH:mm) *",
+                      hintText: "Ex: 07:30",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.access_time),
+                    ),
+                    validator: (v) => (v == null || v.trim().isEmpty) ? "L'heure est requise" : null,
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Prix en FCFA
+                  TextFormField(
+                    controller: priceCtrl,
+                    decoration: const InputDecoration(
+                      labelText: "Tarif du billet (FCFA) *",
+                      hintText: "Ex: 5000",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.payments_outlined),
+                      suffixText: "FCFA",
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return "Le prix est requis";
+                      final p = int.tryParse(v.trim());
+                      if (p == null || p <= 0) return "Prix FCFA invalide";
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Capacité en sièges
+                  TextFormField(
+                    controller: seatsCtrl,
+                    decoration: const InputDecoration(
+                      labelText: "Capacité totale (sièges) *",
+                      hintText: "Ex: 45",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.event_seat),
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return "Capacité requise";
+                      final s = int.tryParse(v.trim());
+                      if (s == null || s <= 0) return "Nombre de sièges invalide";
+                      return null;
+                    },
+                  ),
+                ],
+              ),
+            ),
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Annuler")),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF059669),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () {
+                if (!formKey.currentState!.validate()) return;
+                final p = int.parse(priceCtrl.text.trim());
+                final seats = int.parse(seatsCtrl.text.trim());
+                if (trip == null) {
+                  TripManagementService.instance.addTrip(
+                    departure: selectedDep,
+                    arrival: selectedArr,
+                    company: selectedCompanyName,
+                    time: timeCtrl.text.trim(),
+                    type: "CONFORT",
+                    price: p,
+                    seatsCount: seats,
+                    organizationId: selectedOrgId,
+                  );
+                } else {
+                  TripManagementService.instance.updateTripPrice(trip.id, p);
+                }
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text("Trajet $selectedDep → $selectedArr enregistré !"),
+                    backgroundColor: const Color(0xFF059669),
+                  ),
+                );
+              },
+              child: const Text("Valider"),
+            ),
+          ],
+        ),
       ),
     );
   }

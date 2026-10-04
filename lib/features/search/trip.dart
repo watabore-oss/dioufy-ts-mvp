@@ -13,6 +13,7 @@ class Trip {
   final String arrivalStation;
   final String date;
   final List<String> amenities;
+  final String? organizationId;
 
   /// Symbole monétaire officiel en zone UEMOA
   String get currency => "FCFA";
@@ -32,6 +33,7 @@ class Trip {
     this.arrivalStation = "Gare d'arrivée",
     this.date = "Aujourd'hui",
     this.amenities = const ["Climatisation", "Ceinture", "Prise USB"],
+    this.organizationId,
   });
 
   /// Construit un objet [Trip] depuis un enregistrement Supabase ou local
@@ -122,6 +124,7 @@ class Trip {
       amenities: map['amenities'] is List
           ? (map['amenities'] as List).map((e) => e.toString()).toList()
           : const ["Climatisation", "Ceinture", "Prise USB"],
+      organizationId: (map['organization_id'] ?? map['agency_id'])?.toString(),
     );
   }
 
@@ -141,6 +144,7 @@ class Trip {
       'arrivalStation': arrivalStation,
       'date': date,
       'amenities': amenities,
+      if (organizationId != null) 'organization_id': organizationId,
     };
   }
 }

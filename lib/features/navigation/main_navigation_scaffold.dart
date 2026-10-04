@@ -859,11 +859,189 @@ class _UserProfileTab extends StatelessWidget {
                     ),
                   ),
                 ],
+
+                const SizedBox(height: 24),
+
+                // SECTION D'ACCÈS RAPIDE AUX ESPACES MÉTIERS & DÉMO
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.03),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: const [
+                          Icon(Icons.workspace_premium_rounded, color: Color(0xFF1D4ED8), size: 22),
+                          SizedBox(width: 8),
+                          Text(
+                            'Espaces Métiers & Démonstration',
+                            style: TextStyle(
+                              fontSize: 15.5,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Accédez directement aux interfaces des différents rôles du système :',
+                        style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                      ),
+                      const SizedBox(height: 14),
+                      _buildQuickAccessTile(
+                        context,
+                        icon: Icons.admin_panel_settings_rounded,
+                        color: const Color(0xFF1D4ED8),
+                        title: '👑 Super Administration',
+                        subtitle: 'Cockpit exécutif réel & Gestion des Coopératives GIE (P1 & P3)',
+                        onTap: () async {
+                          await AuthService.instance.simulateRoleForDev(AppRole.superAdmin);
+                          if (context.mounted) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const SuperAdminDashboardScreen()),
+                            );
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      _buildQuickAccessTile(
+                        context,
+                        icon: Icons.account_balance_rounded,
+                        color: const Color(0xFF059669),
+                        title: '🏢 Coopérative GIE',
+                        subtitle: 'Programmation des départs & Flotte de bus (P2)',
+                        onTap: () async {
+                          await AuthService.instance.simulateRoleForDev(AppRole.gieAdmin, organizationId: 'gie_thies');
+                          if (context.mounted) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const GieDashboardScreen()),
+                            );
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      _buildQuickAccessTile(
+                        context,
+                        icon: Icons.badge_rounded,
+                        color: const Color(0xFFD97706),
+                        title: '🚌 Chef de Bord / Chauffeur',
+                        subtitle: 'Feuille de route & clôture de caisse',
+                        onTap: () async {
+                          await AuthService.instance.simulateRoleForDev(AppRole.driver);
+                          if (context.mounted) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const ChauffeurScreen()),
+                            );
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      _buildQuickAccessTile(
+                        context,
+                        icon: Icons.departure_board_rounded,
+                        color: const Color(0xFF7C3AED),
+                        title: '🎫 Régulation Quai / Coxeur',
+                        subtitle: 'Guichet quai & scan QR code',
+                        onTap: () async {
+                          await AuthService.instance.simulateRoleForDev(AppRole.coxeur);
+                          if (context.mounted) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const CoxeurDashboardScreen()),
+                            );
+                          }
+                        },
+                      ),
+                      if (isLoggedIn) ...[
+                        const SizedBox(height: 12),
+                        Center(
+                          child: TextButton.icon(
+                            onPressed: () {
+                              AuthService.instance.continueAsGuest();
+                            },
+                            icon: const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF64748B)),
+                            label: const Text(
+                              'Revenir en mode Voyageur',
+                              style: TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildQuickAccessTile(
+    BuildContext context, {
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.18), width: 1.1),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Color(0xFF0F172A)),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF94A3B8)),
+          ],
+        ),
+      ),
     );
   }
 }
