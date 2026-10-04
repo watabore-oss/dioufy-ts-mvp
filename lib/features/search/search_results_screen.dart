@@ -69,6 +69,18 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
         .toList();
   }
 
+  void _navigateToSeatSelection(Trip trip) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SeatSelectionScreen(
+          trip: trip,
+          requestedPassengers: widget.passengerCount,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final displayedDate = widget.travelDate ?? "Aujourd'hui";
@@ -162,271 +174,281 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                       ),
                     ),
                   )
-                : ListView.builder(
+                 : ListView.builder(
                     padding: const EdgeInsets.all(16),
                     itemCount: displayedTrips.length,
                     itemBuilder: (context, index) {
                       final trip = displayedTrips[index];
                       final int totalForPassengers = trip.price * widget.passengerCount;
 
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: DioufyRadius.lgAll,
-                          border: Border.all(color: DioufyColors.border),
-                          boxShadow: DioufyShadows.card,
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(18),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // En-tête carte : Compagnie et Type de car
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.all(8),
-                                          decoration: BoxDecoration(
-                                            color: DioufyColors.primarySoft,
-                                            borderRadius: DioufyRadius.smAll,
-                                          ),
-                                          child: const Icon(
-                                            Icons.directions_bus_rounded,
-                                            color: DioufyColors.primary,
-                                            size: 20,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Flexible(
-                                          child: Text(
-                                            trip.company,
-                                            style: const TextStyle(
-                                              fontFamily: DioufyTypography.fontFamily,
-                                              fontWeight: DioufyTypography.bold,
-                                              fontSize: 16.5,
-                                              color: DioufyColors.textPrimary,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: DioufyColors.emeraldSoft,
-                                      borderRadius: DioufyRadius.smAll,
-                                      border: Border.all(color: DioufyColors.emeraldLight.withValues(alpha: 0.3)),
-                                    ),
-                                    child: Text(
-                                      trip.type,
-                                      style: const TextStyle(
-                                        fontFamily: DioufyTypography.fontFamily,
-                                        color: DioufyColors.emerald,
-                                        fontWeight: DioufyTypography.bold,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                      return Material(
+                        color: Colors.transparent,
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: DioufyRadius.lgAll,
+                            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x0D0F172A),
+                                blurRadius: 14,
+                                offset: Offset(0, 4),
                               ),
-
-                              const SizedBox(height: 16),
-
-                              // Heure, durée et trajet (Typographie rehaussée)
-                              Row(
+                            ],
+                          ),
+                          child: InkWell(
+                            onTap: () => _navigateToSeatSelection(trip),
+                            borderRadius: DioufyRadius.lgAll,
+                            mouseCursor: SystemMouseCursors.click,
+                            splashColor: DioufyColors.primary.withValues(alpha: 0.1),
+                            highlightColor: DioufyColors.primary.withValues(alpha: 0.04),
+                            child: Padding(
+                              padding: const EdgeInsets.all(18),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  ConstrainedBox(
-                                    constraints: const BoxConstraints(maxWidth: 120),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          trip.time,
-                                          style: const TextStyle(
-                                            fontFamily: DioufyTypography.fontFamily,
-                                            fontSize: 24,
-                                            fontWeight: DioufyTypography.black,
-                                            color: DioufyColors.textPrimary,
-                                          ),
-                                        ),
-                                        Text(
-                                          trip.departureStation,
-                                          style: const TextStyle(
-                                            fontFamily: DioufyTypography.fontFamily,
-                                            fontSize: 13,
-                                            color: DioufyColors.textSecondary,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: Column(
-                                      children: [
-                                        Text(
-                                          trip.duration,
-                                          style: const TextStyle(
-                                            fontFamily: DioufyTypography.fontFamily,
-                                            fontSize: 12.5,
-                                            fontWeight: DioufyTypography.bold,
-                                            color: DioufyColors.primary,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                                          child: Row(
-                                            children: [
-                                              const CircleAvatar(radius: 3, backgroundColor: DioufyColors.primary),
-                                              Expanded(child: Container(height: 1.5, color: DioufyColors.border)),
-                                              const Icon(Icons.arrow_forward_ios_rounded, size: 11, color: DioufyColors.primary),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  ConstrainedBox(
-                                    constraints: const BoxConstraints(maxWidth: 120),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
-                                      children: [
-                                        const Text(
-                                          "Arrivée",
-                                          style: TextStyle(
-                                            fontFamily: DioufyTypography.fontFamily,
-                                            fontSize: 12,
-                                            color: DioufyColors.textSecondary,
-                                          ),
-                                        ),
-                                        Text(
-                                          trip.arrivalStation,
-                                          style: const TextStyle(
-                                            fontFamily: DioufyTypography.fontFamily,
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                            color: DioufyColors.textPrimary,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          textAlign: TextAlign.end,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-
-                              const SizedBox(height: 16),
-                              const Divider(height: 1, color: DioufyColors.surfaceSoft),
-                              const SizedBox(height: 12),
-
-                              // Bas de la carte : Places restantes, prix FCFA et bouton Choisir
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
+                                  // En-tête carte : Compagnie et Type de car
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Row(
                                           children: [
-                                            const Icon(Icons.event_seat_rounded, size: 15, color: DioufyColors.textSecondary),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              "${trip.seatsLeft} places restantes",
-                                              style: TextStyle(
-                                                fontFamily: DioufyTypography.fontFamily,
-                                                fontSize: 13,
-                                                color: trip.seatsLeft < 5 ? DioufyColors.coral : DioufyColors.textSecondary,
-                                                fontWeight: FontWeight.w600,
+                                            Container(
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(
+                                                color: DioufyColors.primarySoft,
+                                                borderRadius: DioufyRadius.smAll,
+                                              ),
+                                              child: const Icon(
+                                                Icons.directions_bus_rounded,
+                                                color: DioufyColors.primary,
+                                                size: 20,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Flexible(
+                                              child: Text(
+                                                trip.company,
+                                                style: const TextStyle(
+                                                  fontFamily: DioufyTypography.fontFamily,
+                                                  fontWeight: DioufyTypography.bold,
+                                                  fontSize: 16.5,
+                                                  color: DioufyColors.textPrimary,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
                                               ),
                                             ),
                                           ],
                                         ),
-                                        const SizedBox(height: 4),
-                                        Row(
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: DioufyColors.emeraldSoft,
+                                          borderRadius: DioufyRadius.smAll,
+                                          border: Border.all(color: DioufyColors.emeraldLight.withValues(alpha: 0.3)),
+                                        ),
+                                        child: Text(
+                                          trip.type,
+                                          style: const TextStyle(
+                                            fontFamily: DioufyTypography.fontFamily,
+                                            color: DioufyColors.emerald,
+                                            fontWeight: DioufyTypography.bold,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+
+                                  const SizedBox(height: 16),
+
+                                  // Heure, durée et trajet (Typographie rehaussée)
+                                  Row(
+                                    children: [
+                                      ConstrainedBox(
+                                        constraints: const BoxConstraints(maxWidth: 120),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              "${trip.price} FCFA",
+                                              trip.time,
                                               style: const TextStyle(
                                                 fontFamily: DioufyTypography.fontFamily,
-                                                fontSize: 22,
+                                                fontSize: 24,
                                                 fontWeight: DioufyTypography.black,
-                                                color: DioufyColors.emerald,
+                                                color: DioufyColors.textPrimary,
                                               ),
                                             ),
-                                            const SizedBox(width: 5),
-                                            const XofCurrencyBadge(size: 18),
+                                            Text(
+                                              trip.departureStation,
+                                              style: const TextStyle(
+                                                fontFamily: DioufyTypography.fontFamily,
+                                                fontSize: 13,
+                                                color: DioufyColors.textSecondary,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Column(
+                                          children: [
+                                            Text(
+                                              trip.duration,
+                                              style: const TextStyle(
+                                                fontFamily: DioufyTypography.fontFamily,
+                                                fontSize: 12.5,
+                                                fontWeight: DioufyTypography.bold,
+                                                color: DioufyColors.primary,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Padding(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                                              child: Row(
+                                                children: [
+                                                  const CircleAvatar(radius: 3, backgroundColor: DioufyColors.primary),
+                                                  Expanded(child: Container(height: 1.5, color: DioufyColors.border)),
+                                                  const Icon(Icons.arrow_forward_ios_rounded, size: 11, color: DioufyColors.primary),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      ConstrainedBox(
+                                        constraints: const BoxConstraints(maxWidth: 120),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.end,
+                                          children: [
+                                            const Text(
+                                              "Arrivée",
+                                              style: TextStyle(
+                                                fontFamily: DioufyTypography.fontFamily,
+                                                fontSize: 12,
+                                                color: DioufyColors.textSecondary,
+                                              ),
+                                            ),
+                                            Text(
+                                              trip.arrivalStation,
+                                              style: const TextStyle(
+                                                fontFamily: DioufyTypography.fontFamily,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                                color: DioufyColors.textPrimary,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              textAlign: TextAlign.end,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+
+                                  const SizedBox(height: 16),
+                                  const Divider(height: 1, color: DioufyColors.surfaceSoft),
+                                  const SizedBox(height: 12),
+
+                                  // Bas de la carte : Places restantes, prix FCFA et bouton d'action
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                const Icon(Icons.event_seat_rounded, size: 15, color: DioufyColors.textSecondary),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  "${trip.seatsLeft} places restantes",
+                                                  style: TextStyle(
+                                                    fontFamily: DioufyTypography.fontFamily,
+                                                    fontSize: 13,
+                                                    color: trip.seatsLeft < 5 ? DioufyColors.coral : DioufyColors.textSecondary,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Row(
+                                              children: [
+                                                Text(
+                                                  "${trip.price} FCFA",
+                                                  style: const TextStyle(
+                                                    fontFamily: DioufyTypography.fontFamily,
+                                                    fontSize: 22,
+                                                    fontWeight: DioufyTypography.black,
+                                                    color: DioufyColors.emerald,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 5),
+                                                const XofCurrencyBadge(size: 18),
+                                                if (widget.passengerCount > 1) ...[
+                                                  const SizedBox(width: 4),
+                                                  const Text(
+                                                    "/ place",
+                                                    style: TextStyle(
+                                                      fontFamily: DioufyTypography.fontFamily,
+                                                      fontSize: 12,
+                                                      color: DioufyColors.textSecondary,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
                                             if (widget.passengerCount > 1) ...[
-                                              const SizedBox(width: 4),
-                                              const Text(
-                                                "/ place",
-                                                style: TextStyle(
+                                              Text(
+                                                "Total: $totalForPassengers FCFA",
+                                                style: const TextStyle(
                                                   fontFamily: DioufyTypography.fontFamily,
-                                                  fontSize: 12,
-                                                  color: DioufyColors.textSecondary,
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: DioufyColors.primary,
                                                 ),
                                               ),
                                             ],
                                           ],
                                         ),
-                                        if (widget.passengerCount > 1) ...[
-                                          Text(
-                                            "Total: $totalForPassengers FCFA",
-                                            style: const TextStyle(
-                                              fontFamily: DioufyTypography.fontFamily,
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.bold,
-                                              color: DioufyColors.primary,
-                                            ),
+                                      ),
+                                      ElevatedButton.icon(
+                                        onPressed: () => _navigateToSeatSelection(trip),
+                                        icon: const Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.white),
+                                        label: const Text(
+                                          "Choisir ce car",
+                                          style: TextStyle(
+                                            fontFamily: DioufyTypography.fontFamily,
+                                            fontWeight: DioufyTypography.bold,
+                                            color: Colors.white,
+                                            fontSize: 15,
                                           ),
-                                        ],
-                                      ],
-                                    ),
-                                  ),
-                                  ElevatedButton(
-                                    onPressed: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => SeatSelectionScreen(
-                                          trip: trip,
-                                          requestedPassengers: widget.passengerCount,
+                                        ),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: DioufyColors.primary,
+                                          foregroundColor: Colors.white,
+                                          elevation: 2,
+                                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+                                          shape: const RoundedRectangleBorder(
+                                            borderRadius: DioufyRadius.mdAll,
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: DioufyColors.primary,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
-                                      shape: const RoundedRectangleBorder(
-                                        borderRadius: DioufyRadius.mdAll,
-                                      ),
-                                    ),
-                                    child: const Text(
-                                      "Choisir",
-                                      style: TextStyle(
-                                        fontFamily: DioufyTypography.fontFamily,
-                                        fontWeight: DioufyTypography.bold,
-                                        color: Colors.white,
-                                        fontSize: 15.5,
-                                      ),
-                                    ),
+                                    ],
                                   ),
                                 ],
                               ),
-                            ],
+                            ),
                           ),
                         ),
                       );

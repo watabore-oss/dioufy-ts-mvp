@@ -167,11 +167,13 @@ class _LandingScreenState extends State<LandingScreen> {
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final initial = _departureDate.isBefore(today) ? today : _departureDate;
     final picked = await showDatePicker(
       context: context,
-      initialDate: _departureDate.isBefore(now) ? now : _departureDate,
-      firstDate: now,
-      lastDate: now.add(const Duration(days: 90)),
+      initialDate: initial,
+      firstDate: today,
+      lastDate: today.add(const Duration(days: 90)),
       locale: const Locale('fr', 'FR'),
       builder: (context, child) {
         return Theme(

@@ -44,11 +44,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final initial = selectedDate.isBefore(today) ? today : selectedDate;
     final picked = await showDatePicker(
       context: context,
-      initialDate: selectedDate,
-      firstDate: now,
-      lastDate: now.add(const Duration(days: 60)),
+      initialDate: initial,
+      firstDate: today,
+      lastDate: today.add(const Duration(days: 60)),
+      locale: const Locale('fr', 'FR'),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(

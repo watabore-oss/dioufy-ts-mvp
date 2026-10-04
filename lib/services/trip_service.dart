@@ -74,10 +74,6 @@ class TripService {
       return remoteTrips;
     } catch (e) {
       debugPrint('[TripService] Erreur recherche Supabase : $e');
-      // Si une erreur survient et qu'on a un cache récent, on peut le proposer
-      if (_memoryCache.containsKey(cacheKey) && _memoryCache[cacheKey]!.isNotEmpty) {
-        return _memoryCache[cacheKey]!;
-      }
       rethrow;
     }
   }

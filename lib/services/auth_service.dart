@@ -307,6 +307,7 @@ class AuthService extends ChangeNotifier {
 
   /// 1. Achat Direct Sans Compte (Guest Checkout)
   void continueAsGuest() {
+    if (_currentUser.isGuest) return;
     _currentUser = AppUser.guest();
     RbacService.instance.clearAndResetToPassenger();
     notifyListeners();

@@ -131,23 +131,50 @@ class _GieDashboardScreenState extends State<GieDashboardScreen> with SingleTick
             .lte('depart_at', endOfDay);
 
         tripsCount = tripsRes.length;
+        final tripIds = tripsRes.map((t) => t['id']?.toString()).whereType<String>().toList();
 
-        // Calcul des recettes réelles des paiements confirmés aujourd'hui
-        final paymentsRes = await client
-            .from('payments')
-            .select('amount')
-            .eq('status', 'successful')
-            .gte('created_at', startOfDay)
-            .lte('created_at', endOfDay);
+        // Calcul des recettes réelles STRICTEMENT filtrées par l'organisation GIE
+        if (_organizationId != null && _organizationId!.isNotEmpty) {
+          try {
+            final commRes = await client
+                .from('ticket_commissions')
+                .select('gie_share')
+                .eq('organization_id', _organizationId!)
+                .gte('created_at', startOfDay)
+                .lte('created_at', endOfDay);
 
-        for (var p in paymentsRes) {
-          final amt = (p['amount'] as num?)?.toInt() ?? 0;
-          totalJour += amt;
+            for (var c in commRes) {
+              final share = (c['gie_share'] as num?)?.toInt() ?? 0;
+              totalJour += share;
+            }
+          } catch (commErr) {
+            debugPrint('[GieDashboard] Note ticket_commissions fallback: $commErr');
+          }
         }
+
+        // Si ticket_commissions n'a pas encore de données, sommer les paiements des réservations de ces trajets GIE uniquement
+        if (totalJour == 0 && tripIds.isNotEmpty) {
+          try {
+            final bookingsRes = await client
+                .from('bookings')
+                .select('id, payments!inner(amount, status)')
+                .inFilter('trip_id', tripIds)
+                .eq('payments.status', 'successful');
+
+            for (var b in bookingsRes) {
+              final pList = b['payments'] as List?;
+              if (pList != null) {
+                for (var p in pList) {
+                  totalJour += (p['amount'] as num?)?.toInt() ?? 0;
+                }
+              }
+            }
+          } catch (_) {}
+        }
+
         // Calcul du taux de remplissage réel à partir des sièges vendus
         int totalCapacityAllTrips = 0;
         int totalSoldSeats = 0;
-        final tripIds = tripsRes.map((t) => t['id']?.toString()).whereType<String>().toList();
 
         for (var t in tripsRes) {
           final seatsCount = (t['seats_count'] as num?)?.toInt() ?? 36;

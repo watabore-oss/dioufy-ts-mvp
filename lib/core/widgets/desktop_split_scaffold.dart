@@ -120,7 +120,11 @@ class DesktopSplitScaffold extends StatelessWidget {
             width: 520,
             constraints: const BoxConstraints(minWidth: 460, maxWidth: 580),
             color: effectiveBg,
-            child: _buildLeftPane(context),
+            child: Scaffold(
+              backgroundColor: effectiveBg,
+              appBar: _buildAppBar(context),
+              body: child,
+            ),
           ),
 
           // -------- SÉPARATEUR FIN 1.2px --------
@@ -163,17 +167,6 @@ class DesktopSplitScaffold extends StatelessWidget {
       appBar: _buildAppBar(context),
       floatingActionButton: floatingActionButton,
       body: child,
-    );
-  }
-
-  // ==================== VOLET GAUCHE DESKTOP ====================
-  Widget _buildLeftPane(BuildContext context) {
-    final appBar = _buildAppBar(context);
-    return Column(
-      children: [
-        if (appBar != null) appBar,
-        Expanded(child: child),
-      ],
     );
   }
 

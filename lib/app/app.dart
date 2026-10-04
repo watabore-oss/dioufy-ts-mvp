@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import '../core/theme.dart';
 import '../services/auth_service.dart';
 import '../features/landing/landing_screen.dart';
@@ -49,6 +50,16 @@ class DioufyApp extends StatelessWidget {
           home: homeWidget,
           onGenerateRoute: AppRouter.onGenerateRoute,
           debugShowCheckedModeBanner: false,
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [
+            Locale('fr', 'FR'),
+            Locale('en', 'US'),
+          ],
+          locale: const Locale('fr', 'FR'),
           builder: (context, child) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               VersionCheckService.instance.showUpdateDialogIfNeeded(context);

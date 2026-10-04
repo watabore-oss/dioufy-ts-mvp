@@ -178,7 +178,30 @@ class BookingService {
     }
   }
 
-  /// Validation d'un paiement via la RPC sécurisée `confirm_payment`
+  /// Vérifie si une ou plusieurs réservations ont été marquées payées par le serveur
+  Future<bool> checkBookingPaidStatus(List<String> bookingIds) async {
+    final client = _client;
+    if (client == null) return false;
+
+    final validIds = bookingIds.where(_isValidUuid).toList();
+    if (validIds.isEmpty) return false;
+
+    try {
+      final res = await client
+          .from('bookings')
+          .select('id, status')
+          .inFilter('id', validIds);
+
+      final list = res as List;
+      if (list.isEmpty) return false;
+      return list.every((item) => item['status'] == 'paid');
+    } catch (e) {
+      debugPrint('[BookingService] Erreur checkBookingPaidStatus: $e');
+      return false;
+    }
+  }
+
+  /// Validation d'un paiement (strictement réservée au service_role / agents autorisés)
   /// RÈGLE DE SÉCURITÉ P0 : Aucune altération directe non autorisée des tables `bookings`/`seats`/`payments`.
   Future<Map<String, dynamic>> confirmPayment({
     required List<String> bookingIds,

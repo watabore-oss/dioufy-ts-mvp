@@ -31,19 +31,32 @@ class _ChauffeurScreenState extends State<ChauffeurScreen> {
   Future<void> _loadDriverAssignedTrip() async {
     setState(() => _isLoadingTrip = true);
     try {
-      final client = Supabase.instance.client;
       final currentUserId = AuthService.instance.currentUser.id;
 
-      // 1. Rechercher les trajets actifs assignés à ce chauffeur
-      var filterQuery = client
-          .from('trips')
-          .select('id, from_loc, to_loc, seats_count, status, vehicles(plate_number, capacity), seats(id, status)');
-
-      if (currentUserId.isNotEmpty && !currentUserId.startsWith('guest_')) {
-        filterQuery = filterQuery.eq('driver_id', currentUserId);
+      // Si l'utilisateur n'est pas identifié ou n'a pas d'identifiant chauffeur réel
+      if (currentUserId.isEmpty || currentUserId.startsWith('guest_')) {
+        if (mounted) {
+          setState(() {
+            _currentTripId = null;
+            _routeLine = "Aucun trajet assigné";
+            _busMatricule = "NON ASSIGNÉ";
+            _totalCapacity = 0;
+            _scannedCount = 0;
+            _isLoadingTrip = false;
+          });
+        }
+        return;
       }
 
-      final tripsRes = await filterQuery.order('depart_at', ascending: false).limit(1);
+      final client = Supabase.instance.client;
+
+      // Recherche STRICTEMENT restreinte aux trajets assignés à ce chauffeur précis
+      final tripsRes = await client
+          .from('trips')
+          .select('id, from_loc, to_loc, seats_count, status, vehicles(plate_number, capacity), seats(id, status)')
+          .eq('driver_id', currentUserId)
+          .order('depart_at', ascending: false)
+          .limit(1);
 
       if (tripsRes.isNotEmpty) {
         final trip = tripsRes.first;
@@ -72,41 +85,6 @@ class _ChauffeurScreenState extends State<ChauffeurScreen> {
           });
           return;
         }
-      } else {
-        // Si aucun trajet affecté directement, chercher le dernier départ en cours de la gare
-        final generalRes = await client
-            .from('trips')
-            .select('id, from_loc, to_loc, seats_count, vehicles(plate_number, capacity), seats(id, status)')
-            .order('depart_at', ascending: false)
-            .limit(1);
-
-        if (generalRes.isNotEmpty) {
-          final trip = generalRes.first;
-          final tId = trip['id']?.toString();
-          final from = trip['from_loc']?.toString() ?? 'Dakar';
-          final to = trip['to_loc']?.toString() ?? 'Touba';
-          final vMap = trip['vehicles'] as Map?;
-          final plate = vMap?['plate_number']?.toString() ?? 'DK-LIGNE-SN';
-          final cap = (vMap?['capacity'] as num?)?.toInt() ?? (trip['seats_count'] as num?)?.toInt() ?? 36;
-
-          int boarded = 0;
-          if (trip['seats'] is List) {
-            final sList = trip['seats'] as List;
-            boarded = sList.where((s) => s['status'] == 'sold' || s['status'] == 'occupied').length;
-          }
-
-          if (mounted) {
-            setState(() {
-              _currentTripId = tId;
-              _routeLine = '$from → $to';
-              _busMatricule = plate;
-              _totalCapacity = cap;
-              _scannedCount = boarded;
-              _isLoadingTrip = false;
-            });
-            return;
-          }
-        }
       }
     } catch (e) {
       debugPrint('[ChauffeurScreen] Erreur chargement trajet assigné: $e');
@@ -114,9 +92,10 @@ class _ChauffeurScreenState extends State<ChauffeurScreen> {
 
     if (mounted) {
       setState(() {
-        _routeLine = "Aucun départ actif";
+        _currentTripId = null;
+        _routeLine = "Aucun trajet assigné";
         _busMatricule = "NON ASSIGNÉ";
-        _totalCapacity = 36;
+        _totalCapacity = 0;
         _scannedCount = 0;
         _isLoadingTrip = false;
       });
