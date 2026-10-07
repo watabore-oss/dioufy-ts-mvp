@@ -752,21 +752,10 @@ class _LandingScreenState extends State<LandingScreen> {
             ],
           ),
 
-          // DROITE : Bouton Espaces Métiers, Sélecteur multilingue & bascule de thème
+          // DROITE : Sélecteur multilingue & bascule de thème
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Bouton Espaces Métiers & Démo (sur desktop)
-              if (!isMobile) ...[
-                IconButton(
-                  icon: const Icon(Icons.business_center_rounded, size: 22, color: Color(0xFF1D4ED8)),
-                  tooltip: 'Espaces Métiers & Démonstration',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: _openRoleNavigationModal,
-                ),
-                const SizedBox(width: 8),
-              ],
-
               // Sélecteur de langue (FR ▾, WO, EN)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -989,34 +978,11 @@ class _LandingScreenState extends State<LandingScreen> {
             ),
           ),
         ),
+          ],
+        ),
       ],
-    ),
-    const SizedBox(height: 12),
-    // BOUTON ACCÈS DIRECT ESPACES MÉTIERS & DÉMO
-    SizedBox(
-      height: 46,
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: _openRoleNavigationModal,
-        icon: const Icon(Icons.hub_rounded, size: 19, color: Color(0xFF1D4ED8)),
-        label: const Text(
-          'Accéder aux Espaces Métiers (Super Admin • GIE • Démo)',
-          style: TextStyle(
-            fontSize: 13.5,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF1D4ED8),
-          ),
-        ),
-        style: OutlinedButton.styleFrom(
-          backgroundColor: const Color(0xFFEFF6FF),
-          side: const BorderSide(color: Color(0xFFBFDBFE), width: 1.2),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        ),
-      ),
-    ),
-  ],
-);
-}
+    );
+  }
 
   Widget _buildOrDivider() {
     return const Row(

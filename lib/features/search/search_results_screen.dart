@@ -390,6 +390,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                                                     fontFamily: DioufyTypography.fontFamily,
                                                     fontSize: 20,
                                                     fontWeight: DioufyTypography.black,
+                                                    height: 1.3,
                                                     color: DioufyColors.emerald,
                                                   ),
                                                 ),
@@ -400,6 +401,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                                                     style: TextStyle(
                                                       fontFamily: DioufyTypography.fontFamily,
                                                       fontSize: 12,
+                                                      height: 1.3,
                                                       color: DioufyColors.textSecondary,
                                                     ),
                                                   ),
