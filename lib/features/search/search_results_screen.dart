@@ -106,7 +106,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
               minHeight: 3,
             ),
 
-          // Barre de filtres par compagnie (lumineuse)
+          // Barre de filtres par compagnie (lumineuse et dynamique)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             color: Colors.white,
@@ -115,12 +115,12 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
               child: Row(
                 children: [
                   _buildFilterChip("Toutes"),
-                  const SizedBox(width: 8),
-                  _buildFilterChip("Dioufy Trans"),
-                  const SizedBox(width: 8),
-                  _buildFilterChip("Touba Express"),
-                  const SizedBox(width: 8),
-                  _buildFilterChip("Galsen Tour"),
+                  ...{
+                    ..._allTrips.map((t) => t.company).where((c) => c.trim().isNotEmpty)
+                  }.map((company) => Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: _buildFilterChip(company),
+                      )),
                 ],
               ),
             ),
@@ -181,33 +181,30 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                       final trip = displayedTrips[index];
                       final int totalForPassengers = trip.price * widget.passengerCount;
 
-                      return Material(
-                        color: Colors.transparent,
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: DioufyRadius.lgAll,
-                            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Color(0x0D0F172A),
-                                blurRadius: 14,
-                                offset: Offset(0, 4),
-                              ),
-                            ],
-                          ),
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Material(
+                          color: Colors.white,
+                          borderRadius: DioufyRadius.lgAll,
+                          clipBehavior: Clip.antiAlias,
+                          elevation: 1.5,
+                          shadowColor: const Color(0x1A0F172A),
                           child: InkWell(
                             onTap: () => _navigateToSeatSelection(trip),
                             borderRadius: DioufyRadius.lgAll,
                             mouseCursor: SystemMouseCursors.click,
                             splashColor: DioufyColors.primary.withValues(alpha: 0.1),
                             highlightColor: DioufyColors.primary.withValues(alpha: 0.04),
-                            child: Padding(
-                              padding: const EdgeInsets.all(18),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: DioufyRadius.lgAll,
+                                border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(18),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
                                   // En-tête carte : Compagnie et Type de car
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -366,10 +363,11 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            Row(
+                                            Wrap(
+                                              crossAxisAlignment: WrapCrossAlignment.center,
+                                              spacing: 4,
                                               children: [
                                                 const Icon(Icons.event_seat_rounded, size: 15, color: DioufyColors.textSecondary),
-                                                const SizedBox(width: 4),
                                                 Text(
                                                   "${trip.seatsLeft} places restantes",
                                                   style: TextStyle(
@@ -382,21 +380,21 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                                               ],
                                             ),
                                             const SizedBox(height: 4),
-                                            Row(
+                                            Wrap(
+                                              crossAxisAlignment: WrapCrossAlignment.center,
+                                              spacing: 5,
                                               children: [
                                                 Text(
                                                   "${trip.price} FCFA",
                                                   style: const TextStyle(
                                                     fontFamily: DioufyTypography.fontFamily,
-                                                    fontSize: 22,
+                                                    fontSize: 20,
                                                     fontWeight: DioufyTypography.black,
                                                     color: DioufyColors.emerald,
                                                   ),
                                                 ),
-                                                const SizedBox(width: 5),
-                                                const XofCurrencyBadge(size: 18),
-                                                if (widget.passengerCount > 1) ...[
-                                                  const SizedBox(width: 4),
+                                                const XofCurrencyBadge(size: 17),
+                                                if (widget.passengerCount > 1)
                                                   const Text(
                                                     "/ place",
                                                     style: TextStyle(
@@ -405,7 +403,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                                                       color: DioufyColors.textSecondary,
                                                     ),
                                                   ),
-                                                ],
                                               ],
                                             ),
                                             if (widget.passengerCount > 1) ...[
@@ -451,8 +448,9 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                             ),
                           ),
                         ),
-                      );
-                    },
+                      ),
+                    );
+                  },
                   ),
           ),
         ],

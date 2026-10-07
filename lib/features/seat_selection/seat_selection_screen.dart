@@ -113,15 +113,20 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      "Sélectionnez ${widget.requestedPassengers} place${widget.requestedPassengers > 1 ? 's' : ''}",
-                      style: const TextStyle(
-                        fontFamily: DioufyTypography.fontFamily,
-                        color: DioufyColors.primary,
-                        fontWeight: DioufyTypography.bold,
-                        fontSize: 15,
+                    Expanded(
+                      child: Text(
+                        "Sélectionnez ${widget.requestedPassengers} place${widget.requestedPassengers > 1 ? 's' : ''}",
+                        style: const TextStyle(
+                          fontFamily: DioufyTypography.fontFamily,
+                          color: DioufyColors.primary,
+                          fontWeight: DioufyTypography.bold,
+                          fontSize: 15,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
@@ -186,49 +191,57 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
                           borderRadius: DioufyRadius.mdAll,
                           border: Border.all(color: DioufyColors.border),
                         ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minWidth: 260),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Icon(Icons.airline_seat_recline_normal_rounded, color: DioufyColors.textPrimary, size: 24),
-                                SizedBox(width: 6),
+                                Row(
+                                  children: [
+                                    Icon(Icons.airline_seat_recline_normal_rounded, color: DioufyColors.textPrimary, size: 20),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      "Chauffeur",
+                                      style: TextStyle(
+                                        fontFamily: DioufyTypography.fontFamily,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                        color: DioufyColors.textPrimary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(width: 12),
                                 Text(
-                                  "Chauffeur",
+                                  "Avant du Car",
                                   style: TextStyle(
                                     fontFamily: DioufyTypography.fontFamily,
+                                    fontSize: 11,
                                     fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                    color: DioufyColors.textPrimary,
+                                    color: DioufyColors.primary,
                                   ),
+                                ),
+                                SizedBox(width: 12),
+                                Row(
+                                  children: [
+                                    Icon(Icons.meeting_room_rounded, color: DioufyColors.emerald, size: 18),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      "Porte",
+                                      style: TextStyle(
+                                        fontFamily: DioufyTypography.fontFamily,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                        color: DioufyColors.emerald,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
-                            Text(
-                              "Avant du Car",
-                              style: TextStyle(
-                                fontFamily: DioufyTypography.fontFamily,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: DioufyColors.primary,
-                              ),
-                            ),
-                            Row(
-                              children: [
-                                Icon(Icons.meeting_room_rounded, color: DioufyColors.emerald, size: 20),
-                                SizedBox(width: 4),
-                                Text(
-                                  "Porte",
-                                  style: TextStyle(
-                                    fontFamily: DioufyTypography.fontFamily,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                    color: DioufyColors.emerald,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                       const SizedBox(height: 16),

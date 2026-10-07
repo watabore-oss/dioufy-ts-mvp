@@ -99,21 +99,28 @@ class TransactionSummaryPane extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.directions_bus_rounded, color: Color(0xFF38BDF8), size: 20),
-                          const SizedBox(width: 8),
-                          Text(
-                            trip.company,
-                            style: const TextStyle(
-                              fontFamily: DioufyTypography.fontFamily,
-                              color: Colors.white,
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
+                      Expanded(
+                        child: Row(
+                          children: [
+                            const Icon(Icons.directions_bus_rounded, color: Color(0xFF38BDF8), size: 20),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                trip.company,
+                                style: const TextStyle(
+                                  fontFamily: DioufyTypography.fontFamily,
+                                  color: Colors.white,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
+                      const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(

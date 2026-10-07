@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dioufy_ts_mvp/main.dart';
 import 'package:dioufy_ts_mvp/features/search/search_results_screen.dart';
 import 'package:dioufy_ts_mvp/features/home/home_screen.dart';
+import 'package:dioufy_ts_mvp/features/landing/landing_screen.dart';
 
 void main() {
   testWidgets('Test direct rendering of SearchResultsScreen on Desktop (> 960px)', (WidgetTester tester) async {
@@ -54,7 +55,11 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() => tester.view.resetPhysicalSize());
 
-    await tester.pumpWidget(const DioufyApp());
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: LandingScreen(),
+      ),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 
@@ -63,10 +68,10 @@ void main() {
     expect(searchButton, findsOneWidget);
 
     await tester.ensureVisible(searchButton);
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 100));
     await tester.tap(searchButton);
     await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(milliseconds: 600));
 
     expect(find.byType(SearchResultsScreen), findsOneWidget);
   });

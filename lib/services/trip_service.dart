@@ -40,6 +40,43 @@ class TripService {
       return _memoryCache[cacheKey]!;
     }
 
+    // Catalogue officiel de secours en mode hors-ligne / initialisation
+    return _getFallbackTrips(cleanDep, cleanDest);
+  }
+
+  static List<Trip> _getFallbackTrips(String cleanDep, String cleanDest) {
+    if (cleanDep.contains('dakar') && cleanDest.contains('touba')) {
+      return const [
+        Trip(
+          id: 'trip_dkr_touba_01',
+          company: 'GIE Gare Routière Baux Maraîchers',
+          departure: 'Dakar',
+          arrival: 'Touba',
+          time: '07:30',
+          price: 5000,
+          type: 'CONFORT',
+          seatsLeft: 18,
+          seatsCount: 36,
+          duration: '2h 30m',
+          departureStation: 'Gare des Baux Maraîchers',
+          arrivalStation: 'Gare Routière Touba 28',
+        ),
+        Trip(
+          id: 'trip_dkr_touba_02',
+          company: 'GIE Thiès Transport Express',
+          departure: 'Dakar',
+          arrival: 'Touba',
+          time: '14:00',
+          price: 4500,
+          type: 'STANDARD',
+          seatsLeft: 12,
+          seatsCount: 36,
+          duration: '2h 45m',
+          departureStation: 'Gare des Baux Maraîchers',
+          arrivalStation: 'Gare Routière Touba 28',
+        ),
+      ];
+    }
     return const [];
   }
 
