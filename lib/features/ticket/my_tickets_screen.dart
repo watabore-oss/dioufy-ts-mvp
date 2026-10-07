@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants.dart';
 import '../../core/theme/dioufy_tokens.dart';
 import '../../core/widgets/desktop_split_scaffold.dart';
+import '../../services/auth_service.dart';
 import '../../services/ticket_service.dart';
 import '../search/trip.dart';
 import 'ticket_screen.dart';
@@ -27,6 +29,64 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
 
   Future<void> _loadTickets() async {
     setState(() => _isLoading = true);
+
+    // 1. Consultation prioritaire du serveur Supabase (Source de Vérité)
+    try {
+      final user = AuthService.instance.currentUser;
+      if (user.id.isNotEmpty && !user.id.startsWith('guest_')) {
+        final client = Supabase.instance.client;
+        final res = await client
+            .from('tickets')
+            .select('id, payload, signature, issued_at, composted_at, bookings!inner(id, user_id, status, passenger_name, passenger_phone, seats, trips!inner(id, from_loc, to_loc, depart_at, price, metadata))')
+            .eq('bookings.user_id', user.id)
+            .order('issued_at', ascending: false)
+            .timeout(const Duration(seconds: 4));
+
+        final list = res as List;
+        if (list.isNotEmpty) {
+          final serverTickets = <Map<String, dynamic>>[];
+          for (final item in list) {
+            if (item is Map) {
+              final booking = item['bookings'] as Map? ?? {};
+              final trip = booking['trips'] as Map? ?? {};
+              final payload = item['payload'] as Map? ?? {};
+
+              serverTickets.add({
+                'ref': payload['ref'] ?? item['id']?.toString(),
+                'ticketId': item['id']?.toString(),
+                'status': item['composted_at'] != null ? 'used' : 'confirmed',
+                'composted_at': item['composted_at'],
+                'passenger_name': booking['passenger_name'],
+                'passenger_phone': booking['passenger_phone'],
+                'seats': booking['seats'],
+                'amount': payload['amount'] ?? trip['price'],
+                'created_at': item['issued_at'],
+                'trip': {
+                  'id': trip['id'],
+                  'from': trip['from_loc'],
+                  'to': trip['to_loc'],
+                  'departureTime': trip['depart_at'],
+                  'price': trip['price'],
+                  'company': (trip['metadata'] as Map?)?['company'] ?? 'GIE Dioufy Transport',
+                },
+              });
+            }
+          }
+
+          if (mounted && serverTickets.isNotEmpty) {
+            setState(() {
+              _tickets = serverTickets;
+              _isLoading = false;
+            });
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[MyTicketsScreen] Synchronisation distante impossible, lecture cache local : $e');
+    }
+
+    // 2. Repli hors-ligne sur SharedPreferences
     final tickets = await TicketService.getLocalTickets();
     if (mounted) {
       setState(() {
@@ -420,7 +480,7 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
+            color: color.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(icon, color: color, size: 22),

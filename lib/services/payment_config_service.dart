@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Modèle d'une passerelle de paiement paramétrable par le Super Admin
 class PaymentGatewayConfig {
@@ -131,9 +132,59 @@ class PaymentConfigService extends ChangeNotifier {
 
   PaymentGatewayConfig? getGateway(String id) => _gateways[id];
 
-  /// Initialise la configuration par défaut avec le numéro marchand Wave officiel (774691379)
+  /// Initialise la configuration en interrogeant en priorité Supabase (payment_methods)
   Future<void> initialize() async {
     _initDefaults();
+    
+    // 1. Consultation prioritaire de Supabase (Source Unique de Vérité)
+    try {
+      final client = Supabase.instance.client;
+      final res = await client
+          .from('payment_methods')
+          .select()
+          .order('display_order', ascending: true)
+          .timeout(const Duration(seconds: 4));
+
+      final list = res as List;
+      if (list.isNotEmpty) {
+        for (final item in list) {
+          if (item is Map) {
+            final provider = item['provider']?.toString() ?? '';
+            final isEnabled = item['is_enabled'] == true;
+            final merchantRef = item['merchant_reference']?.toString() ?? '';
+            final paymentUrl = item['payment_url']?.toString();
+            final name = item['name']?.toString();
+
+            if (_gateways.containsKey(provider)) {
+              final existing = _gateways[provider]!;
+              _gateways[provider] = existing.copyWith(
+                isEnabled: isEnabled,
+                merchantCode: merchantRef.isNotEmpty ? merchantRef : existing.merchantCode,
+                name: name ?? existing.name,
+              );
+            } else if (provider.isNotEmpty) {
+              _gateways[provider] = PaymentGatewayConfig(
+                id: provider,
+                name: name ?? provider.toUpperCase(),
+                description: item['instructions']?.toString() ?? 'Paiement sécurisé',
+                isEnabled: isEnabled,
+                merchantCode: merchantRef,
+                webhookUrl: paymentUrl,
+                isTestMode: false,
+                brandColorValue: 0xFF00B2FE,
+                iconIdentifier: provider,
+              );
+            }
+          }
+        }
+        notifyListeners();
+        return;
+      }
+    } catch (e) {
+      debugPrint('[PaymentConfigService] Supabase indisponible, lecture cache local : $e');
+    }
+
+    // 2. Repli sur le cache local SharedPreferences si hors-ligne
     try {
       final prefs = await SharedPreferences.getInstance();
       final rawJson = prefs.getString(_storageKey);
@@ -145,7 +196,7 @@ class PaymentConfigService extends ChangeNotifier {
         }
       }
     } catch (e) {
-      debugPrint('Erreur lecture configuration paiements : $e');
+      debugPrint('Erreur lecture configuration paiements locale : $e');
     }
     notifyListeners();
   }
@@ -156,8 +207,8 @@ class PaymentConfigService extends ChangeNotifier {
       name: 'Wave Sénégal',
       description: 'Paiement instantané 0% frais via QR Code ou Push Wave',
       isEnabled: true,
-      merchantCode: '774691379', // Numéro de compte marchand officiel
-      isTestMode: true,
+      merchantCode: '774691379',
+      isTestMode: false,
       brandColorValue: 0xFF00B2FE,
       iconIdentifier: 'wave',
     );

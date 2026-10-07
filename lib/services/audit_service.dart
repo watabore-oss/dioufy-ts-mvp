@@ -80,16 +80,14 @@ class AuditService {
 
     try {
       final client = Supabase.instance.client;
-      await client.from('audit_logs').insert({
-        'actor_id': (user.id.isNotEmpty && user.id.length > 10) ? user.id : null,
-        'actor_role': role,
-        'actor_organization_id': (orgId != null && orgId.length > 10) ? orgId : null,
-        'action': action,
-        'target_type': targetType,
-        'target_id': targetId,
-        'details': details,
+      // Utilisation de la RPC d'autorité serveur log_audit_event (Sécurité fail-closed)
+      await client.rpc('log_audit_event', params: {
+        'p_action': action,
+        'p_target_type': targetType,
+        'p_target_id': targetId,
+        'p_details': details,
       });
-      debugPrint('[AuditLog] Événement tracé : $action sur $targetType #$targetId par $role');
+      debugPrint('[AuditLog] Événement tracé via RPC serveur : $action sur $targetType #$targetId par $role');
     } catch (e) {
       debugPrint('[AuditLog] Enregistrement serveur différé (mode offline/local) : $e');
     }

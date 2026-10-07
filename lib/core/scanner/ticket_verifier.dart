@@ -23,13 +23,15 @@ class TicketVerifier {
   static Future<ScanResult> verifyAndProcessTicket({
     required String rawValue,
     required ScanSession session,
+    String? tripId,
   }) =>
-      verifyTicket(rawValue: rawValue, session: session);
+      verifyTicket(rawValue: rawValue, session: session, tripId: tripId);
 
   /// Vérifie et composte un billet à partir d'une chaîne brute stabilisée ou directe
   static Future<ScanResult> verifyTicket({
     required String rawValue,
     required ScanSession session,
+    String? tripId,
   }) async {
     final cleanValue = rawValue.trim();
     if (cleanValue.isEmpty) {
@@ -57,13 +59,14 @@ class TicketVerifier {
     }
 
     try {
-      // 3. Consultation prioritaire du serveur central PostgreSQL via la RPC atomique compost_ticket
+      // 3. Consultation prioritaire du serveur central PostgreSQL via la RPC atomique compost_ticket / board_ticket
       final client = _getSupabaseClientSafely();
       if (client != null) {
         try {
           final refToQuery = decoded.ticketId.isNotEmpty ? decoded.ticketId : cleanValue;
           final dynamic rpcRes = await client.rpc('compost_ticket', params: {
             'p_ticket_ref': refToQuery,
+            if (tripId != null && tripId.isNotEmpty) 'p_trip_id': tripId,
           }).timeout(const Duration(milliseconds: 3000));
 
           if (rpcRes is Map) {

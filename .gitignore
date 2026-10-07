@@ -41,4 +41,5 @@ DIOUFY_TS_MASTER_CONFIG.md
 # Dependencies
 node_modules/
 capacitor-app/node_modules/
+supabase/.temp/
 

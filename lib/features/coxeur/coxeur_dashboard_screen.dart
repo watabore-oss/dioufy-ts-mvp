@@ -244,18 +244,19 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
   }
 
   /// Ouverture du scanner caméra pour validation optique de billets passagers
-  Future<void> _openScanner() async {
+  Future<void> _openScanner({QuaiDeparture? dep}) async {
+    ScannerService.instance.startNewSession(tripId: dep?.id);
     final scannedCode = await Navigator.push<String>(
       context,
       MaterialPageRoute(builder: (_) => const QrCameraScannerScreen()),
     );
 
     if (scannedCode != null && scannedCode.isNotEmpty) {
-      final result = await ScannerService.instance.validateDirectCode(scannedCode);
+      final result = await ScannerService.instance.validateDirectCode(scannedCode, tripId: dep?.id);
       if (!mounted) return;
       final passenger = result.passengerName ?? 'Voyageur Dioufy';
       final seats = result.seatNumber ?? 'Libre';
-      final route = result.route ?? 'Ligne Directe';
+      final route = result.route ?? (dep != null ? dep.destination : 'Ligne Directe');
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -703,7 +704,7 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
 
           const SizedBox(height: 14),
 
-          // Actions : Vente Billet Guichet + Workflow départ
+          // Actions : Vente Billet Guichet + Workflow départ + Scan embarquement
           Row(
             children: [
               if (dep.status != BusDepartureStatus.parti)
@@ -719,6 +720,19 @@ class _CoxeurDashboardScreenState extends State<CoxeurDashboardScreen> {
                   ),
                 ),
               if (dep.status != BusDepartureStatus.parti) const SizedBox(width: 8),
+              if (dep.status == BusDepartureStatus.embarquement || dep.status == BusDepartureStatus.aQuai) ...[
+                IconButton.filled(
+                  onPressed: () => _openScanner(dep: dep),
+                  icon: const Icon(Icons.qr_code_scanner, size: 18),
+                  style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xFFD97706),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  tooltip: 'Scanner les billets pour ce départ',
+                ),
+                const SizedBox(width: 8),
+              ],
               if (dep.status != BusDepartureStatus.parti)
                 Expanded(
                   child: ElevatedButton.icon(

@@ -34,12 +34,15 @@ class ScannerService extends ChangeNotifier {
   final FrameProcessor _frameProcessor = FrameProcessor();
   CameraAdapter? _adapter;
 
+  String? _activeTripId;
+
   ScannerState get state => _state;
   ScannerErrorType? get lastError => _lastError;
   String? get statusMessage => _statusMessage;
   ScanSession get session => _session;
   int get processedCount => _session.processedCount;
   CameraAdapter? get adapter => _adapter;
+  String? get activeTripId => _activeTripId;
 
   /// Initialise le capteur caméra approprié selon la plateforme (Natif CameraX ou Web)
   Future<CameraAdapter> initializeAdapter({bool preferNative = true}) async {
@@ -54,8 +57,9 @@ class ScannerService extends ChangeNotifier {
     return _adapter!;
   }
 
-  /// Démarre une nouvelle session d'embarquement / contrôle
-  void startNewSession({String? sessionId}) {
+  /// Démarre une nouvelle session d'embarquement / contrôle avec rattachement au départ
+  void startNewSession({String? sessionId, String? tripId}) {
+    _activeTripId = tripId;
     _session = ScanSession(sessionId: sessionId);
     _stabilizer.reset();
     _state = ScannerState.ready;
@@ -98,6 +102,7 @@ class ScannerService extends ChangeNotifier {
     final result = await TicketVerifier.verifyTicket(
       rawValue: stabilizedValue,
       session: _session,
+      tripId: _activeTripId,
     );
 
     // 4. Retours haptiques et mise à jour de l'état
@@ -133,7 +138,7 @@ class ScannerService extends ChangeNotifier {
 
   /// Traite directement un code issu d'une image fixe (Galerie) ou saisie manuelle (Clavier)
   /// sans passer par le stabilisateur multi-frames ni le régulateur FPS
-  Future<ScanResult> validateDirectCode(String rawCode) async {
+  Future<ScanResult> validateDirectCode(String rawCode, {String? tripId}) async {
     final clean = rawCode.trim();
     if (clean.isEmpty) {
       _state = ScannerState.invalid;
@@ -154,6 +159,7 @@ class ScannerService extends ChangeNotifier {
     final result = await TicketVerifier.verifyTicket(
       rawValue: clean,
       session: _session,
+      tripId: tripId ?? _activeTripId,
     );
 
     if (result.isValid) {

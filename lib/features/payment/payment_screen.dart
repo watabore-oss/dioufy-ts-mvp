@@ -41,14 +41,41 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   int get _totalAmount => widget.trip.price * widget.seats.length;
 
-  /// Valide un paiement et persiste le billet en local avant d'afficher la carte d'embarquement
-  void _completePaymentWithSuccess(String transactionRef) {
+  /// Récupère le billet officiel certifié émis par le serveur pour l'afficher au passager
+  Future<void> _completePaymentWithSuccess(String transactionRef) async {
     final gateway = PaymentConfigService.instance.getGateway(_selectedGatewayId);
     final providerName = gateway?.name ?? 'Paiement Sécurisé';
 
-    // 1. Sauvegarde locale du billet (accès hors-ligne garanti)
-    TicketService.saveTicketLocally({
-      'ref': transactionRef,
+    String ticketOfficialRef = transactionRef;
+    Map<String, dynamic>? serverTicketPayload;
+
+    try {
+      final client = Supabase.instance.client;
+      final realBookingIds = widget.bookingIds
+          .where((id) => !id.startsWith('local_') && !id.startsWith('demo-'))
+          .toList();
+
+      if (realBookingIds.isNotEmpty) {
+        final ticketRes = await client
+            .from('tickets')
+            .select('id, payload, issued_at')
+            .inFilter('booking_id', realBookingIds)
+            .limit(1)
+            .maybeSingle();
+
+        if (ticketRes != null) {
+          final tMap = ticketRes['payload'] as Map?;
+          ticketOfficialRef = tMap?['ref']?.toString() ?? ticketRes['id']?.toString() ?? transactionRef;
+          serverTicketPayload = tMap != null ? Map<String, dynamic>.from(tMap) : null;
+        }
+      }
+    } catch (e) {
+      debugPrint('[PaymentScreen] Lecture ticket officiel Supabase : $e');
+    }
+
+    // Sauvegarde locale du billet en cache hors-ligne
+    await TicketService.saveTicketLocally({
+      'ref': ticketOfficialRef,
       'trip': widget.trip.toMap(),
       'seats': widget.seats,
       'passenger_name': widget.passengerName,
@@ -58,24 +85,19 @@ class _PaymentScreenState extends State<PaymentScreen> {
       'provider': providerName,
       'status': 'confirmed',
       'created_at': DateTime.now().toIso8601String(),
+      if (serverTicketPayload != null) 'server_payload': serverTicketPayload,
     });
 
-    // 2. Confirmation en arrière-plan dans Supabase (idempotente)
-    _bookingService.confirmPayment(
-      bookingIds: widget.bookingIds,
-      provider: providerName,
-      providerRef: transactionRef,
-      amount: _totalAmount,
-    );
+    if (!mounted) return;
 
-    // 3. Affichage du Billet / Carte d'embarquement
+    // Affichage officiel du Billet / Carte d'embarquement
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (_) => TicketScreen(
           trip: widget.trip,
           seats: widget.seats,
-          ref: transactionRef,
+          ref: ticketOfficialRef,
           bookingIds: widget.bookingIds,
           passengerName: widget.passengerName,
           passengerPhone: widget.passengerPhone,
@@ -85,27 +107,42 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   /// Vérifie si les réservations ont été marquées comme payées sur le serveur central
-  Future<bool> _checkIfBookingsPaid() async {
+  Future<Map<String, dynamic>?> _checkServerPaymentStatus() async {
     try {
       final client = Supabase.instance.client;
       final realIds = widget.bookingIds
           .where((id) => !id.startsWith('local_') && !id.startsWith('demo-'))
           .toList();
 
-      if (realIds.isEmpty) return false;
+      if (realIds.isEmpty) return null;
 
-      final response = await client
+      // 1. Vérifie si le webhook ou le serveur a validé le paiement
+      final payRes = await client
+          .from('payments')
+          .select('id, provider_ref, provider, status')
+          .inFilter('booking_id', realIds)
+          .eq('status', 'successful')
+          .maybeSingle();
+
+      if (payRes != null) {
+        return payRes;
+      }
+
+      // 2. Vérification sur bookings si payment row pas encore jointe
+      final bRes = await client
           .from('bookings')
           .select('id, status')
           .inFilter('id', realIds)
           .timeout(const Duration(seconds: 4));
 
-      final list = response as List;
-      if (list.isEmpty) return false;
-      return list.every((item) => item['status'] == 'paid');
+      final list = bRes as List;
+      if (list.isNotEmpty && list.every((item) => item['status'] == 'paid')) {
+        return {'status': 'paid', 'provider_ref': 'WAVE-CONFIRMED'};
+      }
+      return null;
     } catch (e) {
       debugPrint('[PaymentScreen] Vérification statut réservation: $e');
-      return false;
+      return null;
     }
   }
 
@@ -113,20 +150,20 @@ class _PaymentScreenState extends State<PaymentScreen> {
   void _verifyAndProcessWavePayment(BuildContext context) async {
     setState(() => _processing = true);
 
-    final isPaid = await _checkIfBookingsPaid();
+    final paymentRecord = await _checkServerPaymentStatus();
 
     if (!mounted) return;
     setState(() => _processing = false);
     if (!context.mounted) return;
 
-    if (isPaid) {
+    if (paymentRecord != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Color(0xFF059669),
-          content: Text('Paiement vérifié et validé avec succès par le serveur !'),
+          content: Text('Paiement certifié par le serveur ! Émission de votre billet en cours...'),
         ),
       );
-      final ref = 'WAVE-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
+      final ref = paymentRecord['provider_ref']?.toString() ?? 'WAVE-${widget.bookingIds.first.substring(0, 8).toUpperCase()}';
       _completePaymentWithSuccess(ref);
     } else {
       _showPendingPaymentDialog(context);
@@ -154,10 +191,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 10),
-            Text(
-              'Si vous venez d\'effectuer le transfert sur le compte Wave marchand 774691379, veuillez patienter quelques secondes puis actualiser la vérification.',
-              style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
-            ),
+            Builder(builder: (c) {
+              final waveConfig = PaymentConfigService.instance.getGateway('wave');
+              final merch = waveConfig?.merchantCode ?? 'officiel';
+              return Text(
+                'Si vous venez d\'effectuer le transfert sur le compte Wave marchand $merch, veuillez patienter quelques secondes puis actualiser la vérification.',
+                style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+              );
+            }),
             const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.all(12),
@@ -398,10 +439,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
       if (response.status == 'successful' && response.transactionId != null) {
         // Attente de propagation du webhook Flutterwave
         await Future.delayed(const Duration(milliseconds: 1500));
-        final isPaid = await _checkIfBookingsPaid();
+        final payRecord = await _checkServerPaymentStatus();
         if (!context.mounted) return;
-        if (isPaid) {
-          _completePaymentWithSuccess(response.transactionId!);
+        if (payRecord != null) {
+          final txRef = payRecord['provider_ref']?.toString() ?? response.transactionId!;
+          _completePaymentWithSuccess(txRef);
         } else {
           _showPendingPaymentDialog(context);
         }

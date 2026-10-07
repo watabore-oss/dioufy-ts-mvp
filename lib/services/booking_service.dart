@@ -42,47 +42,49 @@ class BookingService {
     }
 
     final client = _client;
-    if (client != null) {
-      try {
-        final response = await client
-            .from('seats')
-            .select('seat_number, status, lock_until')
-            .eq('trip_id', tripId)
-            .timeout(const Duration(seconds: 4));
+    if (client == null) {
+      throw Exception('Service réseau Supabase non disponible.');
+    }
 
-        final List list = response as List;
-        final now = DateTime.now();
-        final occupied = <String>[];
+    try {
+      final response = await client
+          .from('seats')
+          .select('seat_number, status, lock_until')
+          .eq('trip_id', tripId)
+          .timeout(const Duration(seconds: 4));
 
-        for (var item in list) {
-          if (item is Map) {
-            final seatNumber = item['seat_number']?.toString();
-            final status = item['status']?.toString();
-            if (seatNumber == null) continue;
+      final List list = response as List;
+      final now = DateTime.now();
+      final occupied = <String>[];
 
-            if (status == 'occupied' || status == 'booked' || status == 'sold') {
-              occupied.add(seatNumber);
-            } else if (status == 'locked') {
-              final lockUntilStr = item['lock_until']?.toString();
-              if (lockUntilStr != null) {
-                final lockUntil = DateTime.tryParse(lockUntilStr);
-                if (lockUntil != null && lockUntil.isAfter(now)) {
-                  occupied.add(seatNumber);
-                }
-              } else {
+      for (var item in list) {
+        if (item is Map) {
+          final seatNumber = item['seat_number']?.toString();
+          final status = item['status']?.toString();
+          if (seatNumber == null) continue;
+
+          if (status == 'occupied' || status == 'booked' || status == 'sold') {
+            occupied.add(seatNumber);
+          } else if (status == 'locked') {
+            final lockUntilStr = item['lock_until']?.toString();
+            if (lockUntilStr != null) {
+              final lockUntil = DateTime.tryParse(lockUntilStr);
+              if (lockUntil != null && lockUntil.isAfter(now)) {
                 occupied.add(seatNumber);
               }
+            } else {
+              occupied.add(seatNumber);
             }
           }
         }
-        return occupied;
-      } catch (e) {
-        debugPrint('[BookingService] Erreur récupération sièges Supabase : $e');
-        return const [];
       }
+      return occupied;
+    } catch (e) {
+      debugPrint('[BookingService] Erreur récupération sièges Supabase : $e');
+      // En production, ne jamais renvoyer une liste vide si le réseau a échoué
+      // Cela évite de faire croire que tous les sièges sont libres
+      rethrow;
     }
-
-    return const [];
   }
 
   /// Verrouille un siège de façon transactionnelle via la fonction RPC `lock_seat`.
@@ -128,32 +130,62 @@ class BookingService {
     }
   }
 
-  /// Verrouille plusieurs sièges de façon atomique avec rollback en cas d'échec
+  /// Verrouille plusieurs sièges de façon 100% atomique au niveau SQL (lock_seats_atomic)
   Future<List<String>> lockSeatsBatch({
     required String tripId,
     required List<String> seatNumbers,
     String? userId,
+    String? passengerName,
+    String? passengerPhone,
     int lockMinutes = 10,
   }) async {
-    final List<String> lockedBookingIds = [];
+    if (!_isValidUuid(tripId)) {
+      throw ArgumentError('Identifiant de trajet non conforme (UUID requis).');
+    }
+
+    final client = _client;
+    if (client == null) {
+      throw Exception('Service de réservation non connecté.');
+    }
 
     try {
-      for (var seat in seatNumbers) {
-        final bookingId = await lockSeat(
-          tripId: tripId,
-          seatNumber: seat,
-          userId: userId,
-          lockMinutes: lockMinutes,
-        );
-        lockedBookingIds.add(bookingId);
+      final dynamic res = await client.rpc('lock_seats_atomic', params: {
+        'p_trip_id': tripId,
+        'p_seat_numbers': seatNumbers,
+        'p_user_id': userId,
+        'p_passenger_name': passengerName,
+        'p_passenger_phone': passengerPhone,
+        'p_lock_minutes': lockMinutes,
+      }).timeout(const Duration(seconds: 8));
+
+      if (res is Map && res['success'] == true) {
+        final bookingId = res['booking_id']?.toString();
+        if (bookingId != null && bookingId.isNotEmpty) {
+          return [bookingId];
+        }
       }
-      return lockedBookingIds;
+      throw Exception('Impossible de verrouiller les sièges de façon atomique.');
     } catch (e) {
-      // Rollback immédiat des sièges déjà verrouillés
-      for (var id in lockedBookingIds) {
-        await releaseSeat(bookingId: id);
+      debugPrint('[BookingService] Erreur lock_seats_atomic RPC, tentative de repli unitaire: $e');
+      // Repli sur l'ancienne méthode avec rollback si la RPC n'a pas pu être invoquée
+      final List<String> lockedBookingIds = [];
+      try {
+        for (var seat in seatNumbers) {
+          final bookingId = await lockSeat(
+            tripId: tripId,
+            seatNumber: seat,
+            userId: userId,
+            lockMinutes: lockMinutes,
+          );
+          lockedBookingIds.add(bookingId);
+        }
+        return lockedBookingIds;
+      } catch (innerError) {
+        for (var id in lockedBookingIds) {
+          await releaseSeat(bookingId: id);
+        }
+        rethrow;
       }
-      rethrow;
     }
   }
 

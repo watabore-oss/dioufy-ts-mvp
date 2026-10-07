@@ -17,9 +17,9 @@ CREATE TABLE IF NOT EXISTS public.cash_sessions (
     trip_id TEXT,
     driver_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     driver_name TEXT,
-    bus_id TEXT NOT NULL,
-    route TEXT NOT NULL,
-    session_date TEXT NOT NULL,
+    bus_id TEXT NOT NULL DEFAULT '',
+    route TEXT NOT NULL DEFAULT '',
+    session_date TEXT NOT NULL DEFAULT '',
     total_passengers INTEGER NOT NULL DEFAULT 0,
     digital_revenue NUMERIC(12,2) NOT NULL DEFAULT 0.00,
     cash_revenue NUMERIC(12,2) NOT NULL DEFAULT 0.00,
@@ -38,6 +38,26 @@ CREATE TABLE IF NOT EXISTS public.cash_sessions (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Compatibilité défensive si la table existait déjà sous un schéma différent
+ALTER TABLE public.cash_sessions
+    ADD COLUMN IF NOT EXISTS trip_id TEXT,
+    ADD COLUMN IF NOT EXISTS driver_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS driver_name TEXT,
+    ADD COLUMN IF NOT EXISTS bus_id TEXT,
+    ADD COLUMN IF NOT EXISTS route TEXT,
+    ADD COLUMN IF NOT EXISTS session_date TEXT,
+    ADD COLUMN IF NOT EXISTS total_passengers INTEGER DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS digital_revenue NUMERIC(12,2) DEFAULT 0.00,
+    ADD COLUMN IF NOT EXISTS cash_revenue NUMERIC(12,2) DEFAULT 0.00,
+    ADD COLUMN IF NOT EXISTS driver_commission_rate NUMERIC(5,4) DEFAULT 0.0500,
+    ADD COLUMN IF NOT EXISTS coxeur_commission NUMERIC(12,2) DEFAULT 2000.00,
+    ADD COLUMN IF NOT EXISTS platform_fee_rate NUMERIC(5,4) DEFAULT 0.0250,
+    ADD COLUMN IF NOT EXISTS driver_commission NUMERIC(12,2) DEFAULT 0.00,
+    ADD COLUMN IF NOT EXISTS platform_fee NUMERIC(12,2) DEFAULT 0.00,
+    ADD COLUMN IF NOT EXISTS net_cash_deposit NUMERIC(12,2) DEFAULT 0.00,
+    ADD COLUMN IF NOT EXISTS signature TEXT,
+    ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ DEFAULT now();
+
 -- Index pour requêtes performantes
 CREATE INDEX IF NOT EXISTS idx_cash_sessions_driver_id ON public.cash_sessions(driver_id);
 CREATE INDEX IF NOT EXISTS idx_cash_sessions_bus_id ON public.cash_sessions(bus_id);
@@ -46,7 +66,6 @@ CREATE INDEX IF NOT EXISTS idx_cash_sessions_closed_at ON public.cash_sessions(c
 -- Sécurisation RLS
 ALTER TABLE public.cash_sessions ENABLE ROW LEVEL SECURITY;
 
--- Les chauffeurs/utilisateurs authentifiés peuvent enregistrer et consulter leurs sessions
 DROP POLICY IF EXISTS "cash_sessions_select_policy" ON public.cash_sessions;
 CREATE POLICY "cash_sessions_select_policy"
 ON public.cash_sessions
@@ -55,8 +74,8 @@ TO authenticated
 USING (
     driver_id = auth.uid()
     OR EXISTS (
-        SELECT 1 FROM public.user_roles ur
-        WHERE ur.user_id = auth.uid()
+        SELECT 1 FROM public.app_users ur
+        WHERE ur.id = auth.uid()
         AND ur.role IN ('super_admin', 'platform_admin', 'operator_admin', 'gie_agent', 'accountant')
     )
 );
@@ -69,8 +88,8 @@ TO authenticated
 WITH CHECK (
     driver_id IS NULL OR driver_id = auth.uid()
     OR EXISTS (
-        SELECT 1 FROM public.user_roles ur
-        WHERE ur.user_id = auth.uid()
+        SELECT 1 FROM public.app_users ur
+        WHERE ur.id = auth.uid()
         AND ur.role IN ('super_admin', 'platform_admin', 'operator_admin', 'gie_agent')
     )
 );
@@ -254,15 +273,15 @@ FOR ALL
 TO authenticated
 USING (
     EXISTS (
-        SELECT 1 FROM public.user_roles ur
-        WHERE ur.user_id = auth.uid()
+        SELECT 1 FROM public.app_users ur
+        WHERE ur.id = auth.uid()
         AND ur.role IN ('super_admin', 'platform_admin')
     )
 )
 WITH CHECK (
     EXISTS (
-        SELECT 1 FROM public.user_roles ur
-        WHERE ur.user_id = auth.uid()
+        SELECT 1 FROM public.app_users ur
+        WHERE ur.id = auth.uid()
         AND ur.role IN ('super_admin', 'platform_admin')
     )
 );

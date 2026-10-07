@@ -172,7 +172,7 @@ class _ChauffeurScreenState extends State<ChauffeurScreen> {
                     border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
+                        color: Colors.black.withValues(alpha: 0.04),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -340,7 +340,7 @@ class _ChauffeurScreenState extends State<ChauffeurScreen> {
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.03),
+                                  color: Colors.black.withValues(alpha: 0.03),
                                   blurRadius: 6,
                                   offset: const Offset(0, 2),
                                 ),
@@ -462,6 +462,7 @@ class _ChauffeurScreenState extends State<ChauffeurScreen> {
   }
 
   Future<void> _openCameraScanner() async {
+    ScannerService.instance.startNewSession(tripId: _currentTripId);
     final scannedCode = await Navigator.push<String>(
       context,
       MaterialPageRoute(builder: (_) => const QrCameraScannerScreen()),
@@ -533,7 +534,7 @@ class _ChauffeurScreenState extends State<ChauffeurScreen> {
   }
 
   Future<void> _processTicketVerification(String code) async {
-    final result = await ScannerService.instance.validateDirectCode(code);
+    final result = await ScannerService.instance.validateDirectCode(code, tripId: _currentTripId);
     final String passengerName = result.passengerName ?? 'Voyageur Dioufy';
     final String seatsStr = result.seatNumber ?? '1';
     final String ticketId = result.ticketId ?? code;
@@ -604,7 +605,7 @@ class _ChauffeurScreenState extends State<ChauffeurScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: statusColor.withOpacity(0.2),
+                color: statusColor.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
               child: Icon(

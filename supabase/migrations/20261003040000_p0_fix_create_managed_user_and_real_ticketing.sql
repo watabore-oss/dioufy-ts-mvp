@@ -50,6 +50,10 @@ CREATE TABLE IF NOT EXISTS public.stations (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE public.stations 
+    ADD COLUMN IF NOT EXISTS address TEXT,
+    ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
+
 -- Insertion idempotente des gares sénégalaises principales
 INSERT INTO public.stations (name, city, address)
 VALUES
@@ -107,6 +111,7 @@ CREATE INDEX IF NOT EXISTS idx_commissions_trip ON public.ticket_commissions(tri
 -- RLS sur ticket_commissions
 ALTER TABLE public.ticket_commissions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "commissions_read_policy" ON public.ticket_commissions;
 CREATE POLICY "commissions_read_policy" ON public.ticket_commissions
     FOR SELECT TO authenticated
     USING (
@@ -125,10 +130,12 @@ CREATE POLICY "commissions_read_policy" ON public.ticket_commissions
 -- RLS sur vehicles
 ALTER TABLE public.vehicles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "vehicles_select_policy" ON public.vehicles;
 CREATE POLICY "vehicles_select_policy" ON public.vehicles
     FOR SELECT TO authenticated, anon
     USING (TRUE);
 
+DROP POLICY IF EXISTS "vehicles_manage_policy" ON public.vehicles;
 CREATE POLICY "vehicles_manage_policy" ON public.vehicles
     FOR ALL TO authenticated
     USING (
@@ -145,6 +152,7 @@ CREATE POLICY "vehicles_manage_policy" ON public.vehicles
 -- RLS sur stations
 ALTER TABLE public.stations ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "stations_read_all" ON public.stations;
 CREATE POLICY "stations_read_all" ON public.stations
     FOR SELECT TO authenticated, anon
     USING (TRUE);

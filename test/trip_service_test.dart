@@ -62,10 +62,12 @@ void main() {
       );
     });
 
-    test('getOccupiedSeats retourne une liste vide sans planter si Supabase n est pas initialisé', () async {
+    test('getOccupiedSeats lève une exception explicite si Supabase n est pas disponible (fail-closed)', () async {
       final service = BookingService();
-      final seats = await service.getOccupiedSeats('00000000-0000-0000-0000-000000000001');
-      expect(seats, isEmpty);
+      expect(
+        () async => await service.getOccupiedSeats('00000000-0000-0000-0000-000000000001'),
+        throwsA(isA<Exception>()),
+      );
     });
   });
 }
