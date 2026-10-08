@@ -11,6 +11,8 @@ import '../../app/feature_flags/feature_flag_service.dart';
 import '../../app/feature_flags/feature_flag_state.dart';
 import 'rbac_management_screen.dart';
 import '../../services/audit_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/booking_service.dart';
 import '../search/trip.dart';
 
 /// Grand Tableau de Bord Centralisé Super Administrateur (Dioufy-TS)
@@ -40,9 +42,9 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
   void initState() {
     super.initState();
     _tabController = TabController(
-      length: 7,
+      length: 8,
       vsync: this,
-      initialIndex: widget.initialTab.clamp(0, 6),
+      initialIndex: widget.initialTab.clamp(0, 7),
     );
     _refreshKpis();
   }
@@ -140,6 +142,7 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
               unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13.5),
               tabs: const [
                 Tab(icon: Icon(Icons.analytics_outlined), text: 'Cockpit & KPIs'),
+                Tab(icon: Icon(Icons.verified_outlined), text: 'Validation Paiements'),
                 Tab(icon: Icon(Icons.corporate_fare_outlined), text: 'Coopératives GIE'),
                 Tab(icon: Icon(Icons.payments_outlined), text: 'Passerelles Paiement'),
                 Tab(icon: Icon(Icons.directions_bus_outlined), text: 'Trajets & Prix FCFA'),
@@ -153,6 +156,7 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
             controller: _tabController,
             children: [
               _buildKpiTab(),
+              _buildPendingPaymentsTab(),
               _buildGieTab(),
               _buildPaymentsTab(),
               _buildTripsTab(),
@@ -678,7 +682,515 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
   }
 
   // ===========================================================================
-  // 1.BIS. ONGLET COOPÉRATIVES GIE (PRIORITÉ 1)
+  // 1.BIS. ONGLET VALIDATION DES PAIEMENTS EN ATTENTE (CONSOLE DE RECOUVREMENT)
+  // ===========================================================================
+  Widget _buildPendingPaymentsTab() {
+    final client = Supabase.instance.client;
+
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: client
+          .from('bookings')
+          .select('id, user_id, trip_id, seats, status, lock_expires_at, passenger_name, passenger_phone, created_at, trips(company, departure_station, arrival_station, price)')
+          .inFilter('status', ['pending', 'payment_pending'])
+          .order('created_at', ascending: false)
+          .limit(50),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: DioufyColors.primaryDark),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.redAccent, size: 48),
+                  const SizedBox(height: 12),
+                  Text(
+                    "Erreur de chargement des réservations : ${snapshot.error}",
+                    style: const TextStyle(color: Colors.redAccent),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: () => setState(() {}),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text("Réessayer"),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        final bookings = snapshot.data ?? [];
+
+        return RefreshIndicator(
+          onRefresh: () async => setState(() {}),
+          color: const Color(0xFF1D4ED8),
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              // Bandeau explicatif administratif
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  boxShadow: const [
+                    BoxShadow(color: Color(0x080F172A), blurRadius: 8, offset: Offset(0, 2)),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00B2FE).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.verified_outlined, color: Color(0xFF0084BA), size: 24),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Text(
+                                "File des Paiements en Attente",
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: bookings.isEmpty ? const Color(0xFF059669) : const Color(0xFFDC2626),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  "${bookings.length} en attente",
+                                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            "Vérifiez le reçu marchand ou l'encaissement guichet, puis certifiez la transaction pour émettre instantanément le billet du voyageur.",
+                            style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.refresh, color: Color(0xFF1D4ED8)),
+                      tooltip: "Actualiser la file",
+                      onPressed: () => setState(() {}),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              if (bookings.isEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 20),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: const Column(
+                    children: [
+                      Icon(Icons.check_circle_outline, color: Color(0xFF059669), size: 48),
+                      SizedBox(height: 12),
+                      Text(
+                        "Aucun paiement en attente",
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        "Toutes les réservations sont soldées ou confirmées automatiquement par les webhooks.",
+                        style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ...bookings.map((b) => _buildPendingBookingCard(b)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPendingBookingCard(Map<String, dynamic> b) {
+    final bookingId = b['id']?.toString() ?? '';
+    final passengerName = b['passenger_name']?.toString() ?? 'Voyageur Direct';
+    final passengerPhone = b['passenger_phone']?.toString() ?? 'N/A';
+    final trip = b['trips'] as Map<String, dynamic>?;
+    final company = trip?['company']?.toString() ?? 'GIE Partenaire';
+    final dep = trip?['departure_station']?.toString() ?? 'Départ';
+    final arr = trip?['arrival_station']?.toString() ?? 'Arrivée';
+    final int unitPrice = (trip?['price'] as num?)?.toInt() ?? 0;
+
+    List<dynamic> seatsList = [];
+    if (b['seats'] is List) {
+      seatsList = b['seats'] as List;
+    }
+    final seatsStr = seatsList.isNotEmpty ? seatsList.join(', ') : '1 place';
+    final int totalAmount = unitPrice * (seatsList.isNotEmpty ? seatsList.length : 1);
+    final createdAt = DateTime.tryParse(b['created_at']?.toString() ?? '');
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00B2FE).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF0084BA), size: 20),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              passengerName,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              "Tél: $passengerPhone",
+                              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFFDE68A)),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.hourglass_top_rounded, size: 12, color: Color(0xFFD97706)),
+                      SizedBox(width: 4),
+                      Text(
+                        "En attente",
+                        style: TextStyle(color: Color(0xFF92400E), fontSize: 11.5, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              child: Divider(height: 1, color: Color(0xFFF1F5F9)),
+            ),
+            Row(
+              children: [
+                const Icon(Icons.directions_bus_outlined, size: 15, color: Color(0xFF1D4ED8)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    "$company • $dep → $arr",
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 12,
+              runSpacing: 6,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.event_seat_outlined, size: 14, color: Color(0xFF64748B)),
+                    const SizedBox(width: 4),
+                    Text("Siège(s) : $seatsStr", style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                  ],
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.tag, size: 14, color: Color(0xFF64748B)),
+                    const SizedBox(width: 2),
+                    Text(
+                      "Réf : ${bookingId.length > 8 ? bookingId.substring(0, 8).toUpperCase() : bookingId}",
+                      style: const TextStyle(fontSize: 11.5, fontFamily: 'monospace', color: Color(0xFF64748B)),
+                    ),
+                  ],
+                ),
+                if (createdAt != null)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.access_time, size: 14, color: Color(0xFF64748B)),
+                      const SizedBox(width: 4),
+                      Text("Créé à ${_formatTime(createdAt)}", style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                    ],
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Montant à encaisser :", style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                    Row(
+                      children: [
+                        Text(
+                          "$totalAmount FCFA",
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF059669),
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        const XofCurrencyBadge(size: 16),
+                      ],
+                    ),
+                  ],
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => _showValidatePaymentDialog(
+                    bookingId: bookingId,
+                    passengerName: passengerName,
+                    passengerPhone: passengerPhone,
+                    totalAmount: totalAmount,
+                    seatsStr: seatsStr,
+                  ),
+                  icon: const Icon(Icons.check_circle_outline, size: 16, color: Colors.white),
+                  label: const Text(
+                    "Valider le Paiement",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF059669),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showValidatePaymentDialog({
+    required String bookingId,
+    required String passengerName,
+    required String passengerPhone,
+    required int totalAmount,
+    required String seatsStr,
+  }) {
+    final formKey = GlobalKey<FormState>();
+    String selectedProvider = 'Wave';
+    final refController = TextEditingController(
+      text: 'REC-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+    );
+    bool isConfirming = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dlgCtx) => StatefulBuilder(
+        builder: (dlgCtx, setDlgState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: const Row(
+            children: [
+              Icon(Icons.verified, color: Color(0xFF059669)),
+              SizedBox(width: 10),
+              Text(
+                "Certifier l'Encaissement",
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Voyageur : $passengerName ($passengerPhone)", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        const SizedBox(height: 3),
+                        Text("Siège(s) : $seatsStr", style: const TextStyle(fontSize: 12, color: Color(0xFF475569))),
+                        const SizedBox(height: 3),
+                        Text(
+                          "Montant vérifié : $totalAmount FCFA",
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF059669)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text("Moyen d'encaissement constaté :", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    value: selectedProvider,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'Wave', child: Text('Wave (Transfert / QR Marchand)')),
+                      DropdownMenuItem(value: 'Orange Money', child: Text('Orange Money')),
+                      DropdownMenuItem(value: 'Free Money', child: Text('Free Money')),
+                      DropdownMenuItem(value: 'Cash', child: Text('Espèces / Guichet (Cash)')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) {
+                        setDlgState(() => selectedProvider = val);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  const Text("Référence du reçu / Transaction :", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    controller: refController,
+                    decoration: const InputDecoration(
+                      hintText: "Ex: WAVE-TX-998243 ou RECU-CAISSE-12",
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    validator: (val) {
+                      if (val == null || val.trim().isEmpty) {
+                        return "Veuillez renseigner une référence de reçu";
+                      }
+                      return null;
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isConfirming ? null : () => Navigator.pop(dlgCtx),
+              child: const Text("Annuler"),
+            ),
+            ElevatedButton(
+              onPressed: isConfirming
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      setDlgState(() => isConfirming = true);
+
+                      try {
+                        final bookingService = BookingService();
+                        await bookingService.confirmPayment(
+                          bookingIds: [bookingId],
+                          provider: selectedProvider,
+                          providerRef: refController.text.trim(),
+                          amount: totalAmount,
+                        );
+
+                        if (!dlgCtx.mounted) return;
+                        Navigator.pop(dlgCtx);
+
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text("Paiement certifié avec succès pour $passengerName ! Le billet est émis."),
+                              backgroundColor: const Color(0xFF059669),
+                              duration: const Duration(seconds: 4),
+                            ),
+                          );
+                          setState(() {});
+                          _refreshKpis();
+                        }
+                      } catch (e) {
+                        setDlgState(() => isConfirming = false);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text("Erreur validation paiement : $e"),
+                              backgroundColor: Colors.redAccent,
+                            ),
+                          );
+                        }
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF059669),
+                foregroundColor: Colors.white,
+              ),
+              child: isConfirming
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                  : const Text("CONFIRMER LE PAIEMENT"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // 1.TER. ONGLET COOPÉRATIVES GIE (PRIORITÉ 1)
   // ===========================================================================
   Widget _buildGieTab() {
     return AnimatedBuilder(
