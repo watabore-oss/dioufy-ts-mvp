@@ -356,72 +356,70 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                                   const SizedBox(height: 12),
 
                                   // Bas de la carte : Places restantes, prix FCFA et bouton d'action
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Wrap(
-                                              crossAxisAlignment: WrapCrossAlignment.center,
-                                              spacing: 4,
-                                              children: [
-                                                const Icon(Icons.event_seat_rounded, size: 15, color: DioufyColors.textSecondary),
-                                                Text(
-                                                  "${trip.seatsLeft} places restantes",
-                                                  style: TextStyle(
-                                                    fontFamily: DioufyTypography.fontFamily,
-                                                    fontSize: 13,
-                                                    color: trip.seatsLeft < 5 ? DioufyColors.coral : DioufyColors.textSecondary,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Wrap(
-                                              crossAxisAlignment: WrapCrossAlignment.center,
-                                              spacing: 5,
-                                              children: [
-                                                Text(
-                                                  "${trip.price} FCFA",
-                                                  style: const TextStyle(
-                                                    fontFamily: DioufyTypography.fontFamily,
-                                                    fontSize: 20,
-                                                    fontWeight: DioufyTypography.black,
-                                                    height: 1.3,
-                                                    color: DioufyColors.emerald,
-                                                  ),
-                                                ),
-                                                const XofCurrencyBadge(size: 17),
-                                                if (widget.passengerCount > 1)
-                                                  const Text(
-                                                    "/ place",
-                                                    style: TextStyle(
-                                                      fontFamily: DioufyTypography.fontFamily,
-                                                      fontSize: 12,
-                                                      height: 1.3,
-                                                      color: DioufyColors.textSecondary,
-                                                    ),
-                                                  ),
-                                              ],
-                                            ),
-                                            if (widget.passengerCount > 1) ...[
+                                  LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      final isCompact = constraints.maxWidth < 360;
+                                      final priceInfo = Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Wrap(
+                                            crossAxisAlignment: WrapCrossAlignment.center,
+                                            spacing: 4,
+                                            children: [
+                                              const Icon(Icons.event_seat_rounded, size: 15, color: DioufyColors.textSecondary),
                                               Text(
-                                                "Total: $totalForPassengers FCFA",
-                                                style: const TextStyle(
+                                                "${trip.seatsLeft} places restantes",
+                                                style: TextStyle(
                                                   fontFamily: DioufyTypography.fontFamily,
                                                   fontSize: 13,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: DioufyColors.primary,
+                                                  color: trip.seatsLeft < 5 ? DioufyColors.coral : DioufyColors.textSecondary,
+                                                  fontWeight: FontWeight.w600,
                                                 ),
                                               ),
                                             ],
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Wrap(
+                                            crossAxisAlignment: WrapCrossAlignment.center,
+                                            spacing: 6,
+                                            children: [
+                                              Text(
+                                                "${trip.price} FCFA",
+                                                style: const TextStyle(
+                                                  fontFamily: DioufyTypography.fontFamily,
+                                                  fontSize: 21,
+                                                  fontWeight: DioufyTypography.black,
+                                                  color: DioufyColors.emerald,
+                                                ),
+                                              ),
+                                              const XofCurrencyBadge(size: 18),
+                                              if (widget.passengerCount > 1)
+                                                const Text(
+                                                  "/ place",
+                                                  style: TextStyle(
+                                                    fontFamily: DioufyTypography.fontFamily,
+                                                    fontSize: 12.5,
+                                                    color: DioufyColors.textSecondary,
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                          if (widget.passengerCount > 1) ...[
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              "Total: $totalForPassengers FCFA",
+                                              style: const TextStyle(
+                                                fontFamily: DioufyTypography.fontFamily,
+                                                fontSize: 13.5,
+                                                fontWeight: FontWeight.bold,
+                                                color: DioufyColors.primary,
+                                              ),
+                                            ),
                                           ],
-                                        ),
-                                      ),
-                                      ElevatedButton.icon(
+                                        ],
+                                      );
+
+                                      final actionButton = ElevatedButton.icon(
                                         onPressed: () => _navigateToSeatSelection(trip),
                                         icon: const Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.white),
                                         label: const Text(
@@ -442,8 +440,29 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                                             borderRadius: DioufyRadius.mdAll,
                                           ),
                                         ),
-                                      ),
-                                    ],
+                                      );
+
+                                      if (isCompact) {
+                                        return Column(
+                                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                                          children: [
+                                            priceInfo,
+                                            const SizedBox(height: 14),
+                                            actionButton,
+                                          ],
+                                        );
+                                      }
+
+                                      return Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: [
+                                          Expanded(child: priceInfo),
+                                          const SizedBox(width: 12),
+                                          actionButton,
+                                        ],
+                                      );
+                                    },
                                   ),
                                 ],
                               ),

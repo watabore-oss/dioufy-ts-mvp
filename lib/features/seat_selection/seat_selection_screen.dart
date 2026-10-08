@@ -429,9 +429,21 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
                                   ),
                                 );
                               } catch (e) {
+                                final cleanMsg = e.toString()
+                                    .replaceAll("Exception: ", "")
+                                    .replaceAll("ArgumentError: ", "");
                                 setState(() {
-                                  _lockError = e.toString().replaceAll("Exception: ", "");
+                                  _lockError = cleanMsg;
                                 });
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(cleanMsg),
+                                      backgroundColor: DioufyColors.coral,
+                                      duration: const Duration(seconds: 4),
+                                    ),
+                                  );
+                                }
                                 _loadOccupiedSeats();
                               } finally {
                                 if (mounted) {

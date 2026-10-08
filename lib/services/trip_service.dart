@@ -48,7 +48,7 @@ class TripService {
     if (cleanDep.contains('dakar') && cleanDest.contains('touba')) {
       return const [
         Trip(
-          id: 'trip_dkr_touba_01',
+          id: '8ce4613a-491f-4f22-b80f-65281fceca4d',
           company: 'GIE Gare Routière Baux Maraîchers',
           departure: 'Dakar',
           arrival: 'Touba',
@@ -62,7 +62,7 @@ class TripService {
           arrivalStation: 'Gare Routière Touba 28',
         ),
         Trip(
-          id: 'trip_dkr_touba_02',
+          id: '2db8f36a-4032-4f1d-8157-f389d0145742',
           company: 'GIE Thiès Transport Express',
           departure: 'Dakar',
           arrival: 'Touba',
