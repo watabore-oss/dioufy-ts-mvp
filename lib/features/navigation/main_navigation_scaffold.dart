@@ -844,6 +844,16 @@ class _UserProfileTab extends StatelessWidget {
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyTicketsScreen())),
                         ),
+                        if (user.role == AppRole.superAdmin || user.role == AppRole.platformAdmin) ...[
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: const Icon(Icons.admin_panel_settings_outlined, color: Color(0xFF1D4ED8)),
+                            title: const Text('Console Super Administration', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1D4ED8))),
+                            subtitle: const Text('Validation des paiements, GIE, métriques & RBAC', style: TextStyle(fontSize: 12)),
+                            trailing: const Icon(Icons.chevron_right, color: Color(0xFF1D4ED8)),
+                            onTap: () => Navigator.pushNamed(context, '/admin/dashboard'),
+                          ),
+                        ],
                         const Divider(height: 1),
                         ListTile(
                           leading: const Icon(Icons.logout, color: Colors.red),
