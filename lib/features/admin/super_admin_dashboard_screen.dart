@@ -690,7 +690,7 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: client
           .from('bookings')
-          .select('id, user_id, trip_id, seats, status, lock_expires_at, passenger_name, passenger_phone, created_at, trips(company, departure_station, arrival_station, price)')
+          .select('id, user_id, trip_id, seats, status, lock_expires_at, passenger_name, passenger_phone, created_at, trips(price, from_loc, to_loc, depart_at, agencies(name))')
           .inFilter('status', ['pending', 'payment_pending'])
           .order('created_at', ascending: false)
           .limit(50),
@@ -839,9 +839,10 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
     final passengerName = b['passenger_name']?.toString() ?? 'Voyageur Direct';
     final passengerPhone = b['passenger_phone']?.toString() ?? 'N/A';
     final trip = b['trips'] as Map<String, dynamic>?;
-    final company = trip?['company']?.toString() ?? 'GIE Partenaire';
-    final dep = trip?['departure_station']?.toString() ?? 'Départ';
-    final arr = trip?['arrival_station']?.toString() ?? 'Arrivée';
+    final agency = trip?['agencies'] as Map<String, dynamic>?;
+    final company = agency?['name']?.toString() ?? 'GIE Partenaire';
+    final dep = trip?['from_loc']?.toString() ?? 'Départ';
+    final arr = trip?['to_loc']?.toString() ?? 'Arrivée';
     final int unitPrice = (trip?['price'] as num?)?.toInt() ?? 0;
 
     List<dynamic> seatsList = [];
