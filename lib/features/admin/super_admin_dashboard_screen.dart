@@ -142,9 +142,9 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
               unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13.5),
               tabs: const [
                 Tab(icon: Icon(Icons.analytics_outlined), text: 'Cockpit & KPIs'),
-                Tab(icon: Icon(Icons.verified_outlined), text: 'Validation Paiements'),
+                Tab(icon: Icon(Icons.verified_outlined), text: 'Encaisser / Valider (Paiements)'),
                 Tab(icon: Icon(Icons.corporate_fare_outlined), text: 'Coopératives GIE'),
-                Tab(icon: Icon(Icons.payments_outlined), text: 'Passerelles Paiement'),
+                Tab(icon: Icon(Icons.tune_outlined), text: 'Passerelles API & Modes'),
                 Tab(icon: Icon(Icons.directions_bus_outlined), text: 'Trajets & Prix FCFA'),
                 Tab(icon: Icon(Icons.toggle_on_outlined), text: 'Modules & Flags'),
                 Tab(icon: Icon(Icons.admin_panel_settings_outlined), text: 'Gouvernance RBAC'),
@@ -556,21 +556,44 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          ElevatedButton.icon(
-            onPressed: () => RbacManagementScreen.showCreateUserDialog(context),
-            icon: const Icon(Icons.person_add_alt_1, size: 18, color: Colors.white),
-            label: const Text(
-              "+ Créer un Compte",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Colors.white),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF059669),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => RbacManagementScreen.showCreateUserDialog(context),
+                  icon: const Icon(Icons.person_add_alt_1, size: 16, color: Colors.white),
+                  label: const Text(
+                    "+ Créer un Compte",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF059669),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _tabController.animateTo(1),
+                  icon: const Icon(Icons.verified_outlined, size: 16, color: Color(0xFF1D4ED8)),
+                  label: const Text(
+                    "Valider Paiements",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1D4ED8)),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF1D4ED8), width: 1.5),
+                    backgroundColor: const Color(0xFFEFF6FF),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -853,135 +876,156 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
     final int totalAmount = unitPrice * (seatsList.isNotEmpty ? seatsList.length : 1);
     final createdAt = DateTime.tryParse(b['created_at']?.toString() ?? '');
 
+    final actionCallback = () => _showValidatePaymentDialog(
+      bookingId: bookingId,
+      passengerName: passengerName,
+      passengerPhone: passengerPhone,
+      totalAmount: totalAmount,
+      seatsStr: seatsStr,
+    );
+
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 14),
+      elevation: 1,
+      shadowColor: const Color(0x1A059669),
       color: Colors.white,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2),
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.4),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF00B2FE).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: actionCallback,
+        splashColor: const Color(0xFF059669).withValues(alpha: 0.1),
+        highlightColor: const Color(0xFF059669).withValues(alpha: 0.05),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(9),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00B2FE).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF0084BA), size: 22),
                         ),
-                        child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF0084BA), size: 20),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              passengerName,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              "Tél: $passengerPhone",
-                              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                            ),
-                          ],
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                passengerName,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 1),
+                              Text(
+                                "Tél: $passengerPhone",
+                                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500, color: Color(0xFF64748B)),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEF3C7),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFFDE68A)),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.hourglass_top_rounded, size: 12, color: Color(0xFFD97706)),
-                      SizedBox(width: 4),
-                      Text(
-                        "En attente",
-                        style: TextStyle(color: Color(0xFF92400E), fontSize: 11.5, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 10),
-              child: Divider(height: 1, color: Color(0xFFF1F5F9)),
-            ),
-            Row(
-              children: [
-                const Icon(Icons.directions_bus_outlined, size: 15, color: Color(0xFF1D4ED8)),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    "$company • $dep → $arr",
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 12,
-              runSpacing: 6,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.event_seat_outlined, size: 14, color: Color(0xFF64748B)),
-                    const SizedBox(width: 4),
-                    Text("Siège(s) : $seatsStr", style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-                  ],
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.tag, size: 14, color: Color(0xFF64748B)),
-                    const SizedBox(width: 2),
-                    Text(
-                      "Réf : ${bookingId.length > 8 ? bookingId.substring(0, 8).toUpperCase() : bookingId}",
-                      style: const TextStyle(fontSize: 11.5, fontFamily: 'monospace', color: Color(0xFF64748B)),
+                      ],
                     ),
-                  ],
-                ),
-                if (createdAt != null)
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFFDE68A)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.hourglass_top_rounded, size: 13, color: Color(0xFFD97706)),
+                        SizedBox(width: 4),
+                        Text(
+                          "À ENCAISSER",
+                          style: TextStyle(color: Color(0xFF92400E), fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.3),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: Divider(height: 1, color: Color(0xFFE2E8F0)),
+              ),
+              Row(
+                children: [
+                  const Icon(Icons.directions_bus_outlined, size: 16, color: Color(0xFF1D4ED8)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      "$company • $dep → $arr",
+                      style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 14,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.access_time, size: 14, color: Color(0xFF64748B)),
+                      const Icon(Icons.event_seat_outlined, size: 14, color: Color(0xFF64748B)),
                       const SizedBox(width: 4),
-                      Text("Créé à ${_formatTime(createdAt)}", style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                      Text("Siège(s) : $seatsStr", style: const TextStyle(fontSize: 12, color: Color(0xFF475569), fontWeight: FontWeight.w500)),
                     ],
                   ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text("Montant à encaisser :", style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.tag, size: 14, color: Color(0xFF64748B)),
+                      const SizedBox(width: 2),
+                      Text(
+                        "Réf : ${bookingId.length > 8 ? bookingId.substring(0, 8).toUpperCase() : bookingId}",
+                        style: const TextStyle(fontSize: 11.5, fontFamily: 'monospace', fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+                      ),
+                    ],
+                  ),
+                  if (createdAt != null)
                     Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.access_time, size: 14, color: Color(0xFF64748B)),
+                        const SizedBox(width: 4),
+                        Text("Créé à ${_formatTime(createdAt)}", style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                      ],
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text("Montant net à encaisser :", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF475569))),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           "$totalAmount FCFA",
@@ -991,36 +1035,34 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
                             color: Color(0xFF059669),
                           ),
                         ),
-                        const SizedBox(width: 5),
+                        const SizedBox(width: 6),
                         const XofCurrencyBadge(size: 16),
                       ],
                     ),
                   ],
                 ),
-                ElevatedButton.icon(
-                  onPressed: () => _showValidatePaymentDialog(
-                    bookingId: bookingId,
-                    passengerName: passengerName,
-                    passengerPhone: passengerPhone,
-                    totalAmount: totalAmount,
-                    seatsStr: seatsStr,
-                  ),
-                  icon: const Icon(Icons.check_circle_outline, size: 16, color: Colors.white),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: actionCallback,
+                  icon: const Icon(Icons.check_circle_rounded, size: 20, color: Colors.white),
                   label: const Text(
-                    "Valider le Paiement",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                    "VALIDER LE PAIEMENT & ÉMETTRE LE BILLET",
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.3, color: Colors.white),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF059669),
                     foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    elevation: 2,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
